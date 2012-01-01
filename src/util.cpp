@@ -84,7 +84,7 @@ std::string xyz(const cv::Point3d p1)
 
 bool isAlmostSquare ( const double ratio )
 {
-    return ( ratio < 1.5 && ratio > 0.7 );
+    return ( ratio < 1.5 && ratio > 0.5 );
 }
 
 bool isExtraLong(const double ratio)
@@ -128,11 +128,13 @@ std::vector<std::vector<cv::Point> > getSuccessfulContours(
             failedTests[failedTest]++;
         }
     }
+#ifdef PRINT_TESTS
     std::cout << "Failed tests: ";
     for (auto &failure : failedTests) {
         std::cout << failure.first << ":" << failure.second << ", ";
     }
     std::cout << "success:" << succeededContours.size() << std::endl;
+#endif
     return succeededContours;
 }
 

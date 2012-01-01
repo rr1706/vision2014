@@ -42,13 +42,13 @@ const char KEY_SPEED = ' ';
 // config
 ProcessingMode procMode = SA;
 const InputSource mode = V4L2;
-int cameraId = 0;
+int cameraId = 2;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(arrayToIP("10.17.7.2")); //"192.168.17.17"/*"10.17.6.5"*/)); //(0x0A110602)
+const QHostAddress udpRecipient(arrayToIP("10.17.6.2")); //"192.168.17.17"/*"10.17.6.5"*/)); //(0x0A110602)
 const short udpPort = 80;
 QUdpSocket udpSocket;
 const bool saveImages = true;
@@ -58,7 +58,7 @@ static const bool USE_POSE = false;
 static const bool STITCH_IMAGES = false;
 
 // Values for threshold IR
-int gray_min = 200;
+int gray_min = 210;
 int gray_max = 255;
 
 bool SAVE_IMAGES = false;
@@ -241,7 +241,7 @@ int demo()
             return -1;
         }
     } else if (mode == V4L2) {
-        sprintf(str, "/dev/video%d", cameraId);
+        sprintf(str, "/dev/video1706%d", cameraId);
         v4l2Cam = new Webcam(str, 1);
         v4l2Cam->SetResolution(640, 480);
         v4l2Cam->SetFPS(30);
@@ -489,7 +489,8 @@ int demo()
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
-        cout << "Processed all image code in " << seconds << " seconds." << endl;
+        printf("Last frame: %.2f seconds.", seconds);
+        fflush(stdout);
         if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
@@ -517,7 +518,7 @@ void runThread(ThreadData *data) {
     if (resizeResolution != captureResolution)
         cv::resize(data->image, data->image, resizeResolution);
     if (data->id == 2) {
-        cv::flip(data->image, data->image, -1);
+//        cv::flip(data->image, data->image, -1);
     }
     data->original = data->image.clone();
     static const int padding = 5;
@@ -526,6 +527,11 @@ void runThread(ThreadData *data) {
     Mat topROI = data->image.clone(), bottomROI = data->image.clone();
     topROI.pop_back(bottomPortion + padding);
     copyMakeBorder(topROI, topROI, 0, bottomPortion + padding, 0, 0, BORDER_CONSTANT);
+    for (int y = 0; y < 100; y++) {
+        for (int x = 0; x < data->image.cols; x++) {
+            topROI.at<Vec3d>(Point(x, y)) = Vec3d(0, 0, 0);
+        }
+    }
     for (int y = 0; y < topPortion + padding; y++) {
         for (int x = 0; x < data->image.cols; x++) {
             bottomROI.at<Vec3d>(Point(x, y)) = Vec3d(0, 0, 0);
@@ -593,6 +599,12 @@ int sa()
     server = new UDPServer(8888);
     serverThread = new std::thread(&UDPServer::listenLoop, server);
     signal(SIGTERM, [](int signum) {
+        fprintf(stderr, "Abnormal program termination. Closing camera connections...");
+        stopCameras();
+        fprintf(stderr, " done.\n");
+        exit(signum);
+    });
+    signal(SIGINT, [](int signum) {
         fprintf(stderr, "Abnormal program termination. Closing camera connections...");
         stopCameras();
         fprintf(stderr, " done.\n");
@@ -901,7 +913,7 @@ int sa()
             xPos = -1;
             yPos = -1;
         }
-        printf("FindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
+        printf("\rFindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
                R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
         if (USE_POSE) {
             cv::Mat rvec(1,3,cv::DataType<double>::type);
@@ -924,9 +936,11 @@ int sa()
         }
         if (doUdp) {
             int whichGoalHot = 0;
-            if (threadData[0]->pairCase == LEFT || threadData[2]->pairCase == LEFT) {
+            if (threadData[2]->pairCase == LEFT && threadData[0]->pairCase == RIGHT) {
+                whichGoalHot = 0;
+            } else if (threadData[2]->pairCase == LEFT ){//|| threadData[2]->pairCase == LEFT) {
                 whichGoalHot = 1;
-            } else if (threadData[0]->pairCase == RIGHT || threadData[2]->pairCase == RIGHT) {
+            } else if (threadData[0]->pairCase == RIGHT ){//||threadData[2]->pairCase == RIGHT) {
                 whichGoalHot = 2;
             }
             QByteArray datagram = QByteArray::number(xPos) + " "
@@ -960,9 +974,9 @@ int sa()
                 imshow(windowName, pano);
             }
         } else if (displayMode != WindowMode::NONE) {
-            imshow("cam-zero", threadData[0]->dst);
-            imshow("cam-one", threadData[1]->dst);
-            imshow("cma-two", threadData[2]->dst);
+//            imshow("cam-zero", threadData[0]->dst);
+//            imshow("cam-one", threadData[1]->dst);
+//            imshow("cma-two", threadData[2]->dst);
         }
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             threadData[i]->targets.clear();
@@ -974,7 +988,8 @@ int sa()
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(finish-begin).count();
         saLog.log("time", tSnSt).log("frame_time", seconds).log("heading", heading).log("x", xPos).log("y", yPos).flush();
-        cout << "Processed all image code in " << seconds << " seconds." << endl;
+        printf("Last frame: %.2f seconds", seconds);
+        fflush(stdout);
         switch (char key = waitKey(10)) {
         case 27:
             stopCameras();

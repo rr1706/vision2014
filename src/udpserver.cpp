@@ -2,11 +2,12 @@
 #include "config.hpp"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 enum Command {
     CMD_SET_TEAM_RED = 1,
     CMD_SET_TEAM_BLUE = 2,
-    CMD_SHUTDOWN = 20
+    CMD_START_TELEOP = 20
 };
 
 UDPServer::UDPServer(short port) : port(port)
@@ -55,6 +56,8 @@ int UDPServer::iterate()
     switch (call) {
     case CMD_SET_TEAM_RED:
         setColor(RED);
+        break;
+    case CMD_START_TELEOP:
         break;
     }
     return 0;

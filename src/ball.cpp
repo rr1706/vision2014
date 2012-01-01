@@ -36,7 +36,6 @@ vector<BallTest> ballTests = {
          double areaCircle = CV_PI * square(radius);
          int areaContour = contourArea(contour);
          double circleRatio = areaContour / areaCircle;
-         cout << "CIRCLE " << areaCircle << " CONTOUR " << areaContour << " RADIUS " << circleRatio << endl;
          return circleRatio > ballRatioMin && circleRatio < ballRatioMax;
      }}
 };
