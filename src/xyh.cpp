@@ -578,7 +578,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][1]>=0 && R1>0) //If Camera 1 sees Target 1:
     {
         iH++;
-        H = -60 - (180/3.14159)*asin((yR-y1t)/R1) - (P[1][1] - 640)*120./1280;
+        H = -30 - (180/3.14159)*asin((yR-y1t)/R1) - (P[1][1] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -589,7 +589,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][2]>=0 && R2>0) //If Camera 1 sees Target 2:
     {
         iH++;
-        H = -60 + (180/3.14159)*asin((y2t-yR)/R2) - (P[1][2] - 640)*120./1280;
+        H = -30 + (180/3.14159)*asin((y2t-yR)/R2) - (P[1][2] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -600,7 +600,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][3]>=0 && R3>0) //If Camera 1 sees Target 3:
     {
         iH++;
-        H = +120 - (180/3.14159)*asin((y3t-yR)/R3) - (P[1][3] - 640)*120./1280;
+        H = +150 - (180/3.14159)*asin((y3t-yR)/R3) - (P[1][3] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -611,7 +611,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][4]>=0 && R4>0) //If Camera 1 sees Target 4:
     {
         iH++;
-        H = +120 + (180/3.14159)*asin((yR-y4t)/R4) - (P[1][4] - 640)*120./1280;
+        H = +150 + (180/3.14159)*asin((yR-y4t)/R4) - (P[1][4] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -622,7 +622,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][5]>=0 && R5>0) //If Camera 1 sees Target 5:
     {
         iH++;
-        H = -60 - (180/3.14159)*asin((yR-y5t)/R5) - (P[1][5] - 640)*120./1280;
+        H = -30 - (180/3.14159)*asin((yR-y5t)/R5) - (P[1][5] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -633,7 +633,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][6]>=0 && R6>0) //If Camera 1 sees Target 6:
     {
         iH++;
-        H = -60 + (180/3.14159)*asin((y6t-yR)/R6) - (P[1][6] - 640)*120./1280;
+        H = -30 + (180/3.14159)*asin((y6t-yR)/R6) - (P[1][6] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -644,7 +644,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][7]>=0 && R7>0) //If Camera 1 sees Target 7:
     {
         iH++;
-        H = +120 - (180/3.14159)*asin((y7t-yR)/R7) - (P[1][7] - 640)*120./1280;
+        H = +150 - (180/3.14159)*asin((y7t-yR)/R7) - (P[1][7] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -655,7 +655,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[1][8]>=0 && R8>0) //If Camera 1 sees Target 8:
     {
         iH++;
-        H = +120 + (180/3.14159)*asin((yR-y8t)/R8) - (P[1][8] - 640)*120./1280;
+        H = +150 + (180/3.14159)*asin((yR-y8t)/R8) - (P[1][8] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -761,7 +761,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][1]>=0 && R1>0) //If Camera 3 sees Target 1:
     {
         iH++;
-        H = +60 - (180/3.14159)*asin((yR-y1t)/R1) - (P[3][1] - 640)*120./1280;
+        H = +30 - (180/3.14159)*asin((yR-y1t)/R1) - (P[3][1] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -772,7 +772,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][2]>=0 && R2>0) //If Camera 3 sees Target 2:
     {
         iH++;
-        H = +60 + (180/3.14159)*asin((y2t-yR)/R2) - (P[3][2] - 640)*120./1280;
+        H = +30 + (180/3.14159)*asin((y2t-yR)/R2) - (P[3][2] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -783,7 +783,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][3]>=0 && R3>0) //If Camera 3 sees Target 3:
     {
         iH++;
-        H = -120 - (180/3.14159)*asin((y3t-yR)/R3) - (P[3][3] - 640)*120./1280;
+        H = -150 - (180/3.14159)*asin((y3t-yR)/R3) - (P[3][3] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -794,7 +794,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][4]>=0 && R4>0) //If Camera 3 sees Target 4:
     {
         iH++;
-        H = -120 + (180/3.14159)*asin((yR-y4t)/R4) - (P[3][4] - 640)*120./1280;
+        H = -150 + (180/3.14159)*asin((yR-y4t)/R4) - (P[3][4] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -805,7 +805,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][5]>=0 && R5>0) //If Camera 3 sees Target 5:
     {
         iH++;
-        H = +60 - (180/3.14159)*asin((yR-y5t)/R5) - (P[3][5] - 640)*120./1280;
+        H = +30 - (180/3.14159)*asin((yR-y5t)/R5) - (P[3][5] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -816,7 +816,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][6]>=0 && R6>0) //If Camera 3 sees Target 6:
     {
         iH++;
-        H = +60 + (180/3.14159)*asin((y6t-yR)/R6) - (P[3][6] - 640)*120./1280;
+        H = +30 + (180/3.14159)*asin((y6t-yR)/R6) - (P[3][6] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -827,7 +827,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][7]>=0 && R7>0) //If Camera 3 sees Target 7:
     {
         iH++;
-        H = -120 - (180/3.14159)*asin((y7t-yR)/R7) - (P[3][7] - 640)*120./1280;
+        H = -150 - (180/3.14159)*asin((y7t-yR)/R7) - (P[3][7] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
@@ -838,7 +838,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     if (P[3][8]>=0 && R8>0) //If Camera 3 sees Target 8:
     {
         iH++;
-        H = -120 + (180/3.14159)*asin((yR-y8t)/R8) - (P[3][8] - 640)*120./1280;
+        H = -150 + (180/3.14159)*asin((yR-y8t)/R8) - (P[3][8] - 640)*120./1280;
         if (H<0)
             H=H+360;
         if (H<0)
