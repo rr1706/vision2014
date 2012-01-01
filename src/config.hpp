@@ -5,7 +5,6 @@
 #include <opencv2/core/core.hpp>
 
 #include "util.hpp"
-
 extern WindowMode::WindowMode displayMode;
 extern std::string windowName;
 extern int gray_min;

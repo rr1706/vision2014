@@ -61,7 +61,7 @@ static const bool STITCH_IMAGES = false;
 int gray_min = 210;
 int gray_max = 255;
 
-bool SAVE_IMAGES = false;
+bool SAVE_IMAGES = true;
 bool SAVE_LOGS = true;
 
 ThresholdDataHSV ballThreshR = {115, 150, 116, 255, 100, 255};
@@ -990,10 +990,10 @@ int sa()
                 Window::print(string(str), pano, Point(5, 15));
                 imshow(windowName, pano);
             }
-        } else if (displayMode != WindowMode::NONE) {
-//            imshow("cam-zero", threadData[0]->dst);
-//            imshow("cam-one", threadData[1]->dst);
-//            imshow("cma-two", threadData[2]->dst);
+        } else if (false && displayMode != WindowMode::NONE) {
+            imshow("cam-zero", threadData[0]->dst);
+            imshow("cam-one", threadData[1]->dst);
+            imshow("cma-two", threadData[2]->dst);
         }
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             threadData[i]->targets.clear();

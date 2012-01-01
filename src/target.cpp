@@ -199,14 +199,6 @@ void targetDetection(ThreadData &data)
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
-        if (center.x > 450)
-        {
-            continue;
-        }
-        if (center.y < 50)
-        {
-            continue;
-        }
 
         // ratio helps determine orientation of rectangle (vertical / horizontal)
         double ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);
