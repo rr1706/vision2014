@@ -1,0 +1,6 @@
+Debug/
+*.o
+*~
+Depth
+Makefile
+*.user*
