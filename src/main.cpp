@@ -15,6 +15,12 @@ using namespace std;
 #define ESC 27
 #define LOAD_IMAGE 1
 #define USE_CAMERA 0
+enum TargetCase {
+    NONE = 0,
+    ALL = 1,
+    RIGHT = 2,
+    LEFT = 3
+};
 
 float length(float x1, float y1, float x2, float y2)
 {
@@ -206,35 +212,28 @@ int main()
                     {
                         Ratio = (Ratio_Left + Ratio_Right)/(Ratio_Top + Ratio_Bottom);
                     }
+                    cout << "Ratio found: " << Ratio << endl;
+                    if (Ratio > 2) //subject to change
+                    {
+                        //contour is a tall, skinny one
+                        //save off as stationary target
+                        Static_Target.push_back(contours[i]);
+                    } else {
+                        //contour is the short, long, dynamic target
+                        //save off as dynamic target
+                        Dynamic_Target.push_back(contours[i]);
+                    }
 
-                    sprintf(str, "Ratio = %lf", Ratio);
-                    putText(dst, str,Point(5,50), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-
-                    //what if we see all 4?
+//                    //what if we see all 4?
 //                    if (contours.size() != 3)
 //                    {
 //                        if (contours.size() < 4)
 //                        {
-                            //case 1 or 2
-                            if (Ratio > 1) //subject to change
-                            {
-                                //contour is a tall, skinny one
-                                //save off as stationary target
-                                Static_Target.push_back(contours[i]);
-                                drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
+//                            //case 1 or 2
+//                        }
+//                    }
 
-                            }
-                            else
-                            {
-                                //contour is the short, long, dynamic target
-                                //save off as dynamic target
-                                Dynamic_Target.push_back(contours[i]);
-                                drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
-
-                            }
-
-
-                    /// Order targets left to right
+                    // Order targets left to right
 
                 }
 
@@ -268,15 +267,25 @@ int main()
         {
             Mass_Center_Dynamic[i] = Point2f( Moment_Center_Dynamic[i].m10/Moment_Center_Dynamic[i].m00 , Moment_Center_Dynamic[i].m01/Moment_Center_Dynamic[i].m00 );
         }
+        TargetCase targetCase = NONE;
         if(Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0
                 && Mass_Center_Static[0].x > Mass_Center_Dynamic[0].x)
         {
             //case left
+            if (Static_Target.size() + Dynamic_Target.size() == 2) {
+                targetCase = LEFT;
+            }
         }
 
         else
         {
             //case right
+            if (Static_Target.size() + Dynamic_Target.size() == 2) {
+                targetCase = RIGHT;
+            }
+        }
+        if (Static_Target.size() + Dynamic_Target.size() == 4) {
+            targetCase = ALL;
         }
 
         /// Stop timing and calculate FPS and Average FPS
@@ -287,6 +296,10 @@ int main()
         putText(dst, str,Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         sprintf(str, "Average FPS = %.f", time_ave);
         putText(dst, str,Point(5,30), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        sprintf(str, "Case = %.f", targetCase);
+        putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        sprintf(str, "Targets S:%.f D:%.f", Static_Target.size(), Dynamic_Target.size());
+        putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
 
 
         /// Show Images
