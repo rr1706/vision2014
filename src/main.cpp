@@ -76,38 +76,46 @@ void T2B_L2R(CvPoint* pt)
 }
 int main()
 {
-    /// Declare default values of trackbars
+    // Values for inrange
     int hue_min = 70;
     int saturation_min = 30;
     int value_min = 155;
     int hue_max = 255;
     int saturation_max = 255;
     int value_max = 255;
-    const int accuracy = 2; //maximum distance between the original curve and its approximation
 
-    /// Declare Timing and create variables to store frame times
+    // for approxpolydp
+    const int accuracy = 3; //maximum distance between the original curve and its approximation
+
+    // create a storage for the corners for ration test
+    CvPoint pt[4];
+
+    // Declare Timing and create variables to store frame times
     DECLARE_TIMING(FPS);
     double time_now;
     double time_ave;
 
-    /// Define character to store a string of up to 50 characters, to be printed on the image
+    // Define character to store a string of up to 50 characters, to be printed on the image
     char str[50];
 
-    /// Initialize Camera and cv::Mat to hold images
-    CvCapture* capture0 = cvCreateCameraCapture(0);
-    Mat img, dst, thresh;
-    assert( capture0);
+    // for key presses
+    char ch;
 
-    /// Initialize a font, used for printed text onto an image
+#if USE_CAMERA
+    // Initialize Camera and cv::Mat to hold images
+    CvCapture* capture0 = cvCreateCameraCapture(0);
+    assert( capture0);
+#endif
+
+    // Initialize a font, used for printed text onto an image
     CvFont font;
     cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, 0.75, 0, 1, CV_AA);
 
-    /// Create Windows
+    Mat img, dst, thresh, inframe;
+    // Create Windows
     namedWindow("Raw", CV_WINDOW_AUTOSIZE);
     namedWindow("HSV", CV_WINDOW_AUTOSIZE);
     namedWindow("Final", CV_WINDOW_AUTOSIZE);
-
-    Mat inframe;
 
     if(LOAD_IMAGE)
     {
@@ -117,39 +125,38 @@ int main()
 #if ( USE_CAMERA == 1 )
     while ( 1 )
     {
-        /// Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
+        // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         START_TIMING(FPS);
 
-        char ch;
         //Break out of loop if esc is pressed
         if( (ch = waitKey(10) ) == ESC)
             break;
 
-        /// Grab a frame and contain it in the cv::Mat img
-        img = cvQueryFrame( capture0 );
+        // Grab a frame and contain it in the cv::Mat img
+        img = cvQueryFrame( capture0 );  //changes accroding to camera used
         if ( ch == 's' )
             imwrite ( "raw_img.jpg", img );
 #else
-        //changes according to camera used
-        inframe.copyTo(img);
-        {
-
-
-        /// Store the original image img to the Mat dst
-        img.copyTo(dst);
+    inframe.copyTo(img);
+    {
 #endif
-        /// Convert img from BGR(Blue,Green,Red) to HSV(Hue,Saturation,Value)
+        // Store the original image img to the Mat dst
+        img.copyTo(dst);
+
+        // Convert img from BGR(Blue,Green,Red) to HSV(Hue,Saturation,Value)
         cvtColor(img,img,CV_BGR2HSV);
 
-        /// "Threshold" image to pixels in the ranges
+        // "Threshold" image to pixels in the ranges
         inRange(img,Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max),img);
 
-        /// Save img to thresh Mat to show to the user
+        // Save img to thresh Mat to show to the user
         img.copyTo(thresh);
 
+        // Get rid of remaining noise
         erode(img, img, NULL);
+        dilate(img, img, NULL);
 
-        /// Declare containers for contours and contour heirarchy
+        // Declare containers for contours and contour heirarchy
         vector<vector<Point> > contours;
         vector<vector<Point> > Static_Target;
         vector<vector<Point> > Dynamic_Target;
@@ -157,7 +164,7 @@ int main()
 
         findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
 
-        /// Declare container for approximated polygons
+        // Declare container for approximated polygons
         vector<vector<Point> > contours_poly( contours.size() );
 
         double Ratio;
@@ -166,21 +173,18 @@ int main()
         double Ratio_Right;
         double Ratio_Left;
 
-        /// Create a for loop to go through each contour (i) one at a time
-        //why not while(contours)?
+        // Create a for loop to go through each contour (i) one at a time
         for( unsigned int i = 0; i < contours.size(); i++ )
         {
-            /// If contour has an area greater than 500 pixels
+            // If contour has an area greater than 500 pixels
             if(contourArea(contours[i])>Minimum_Area)
             {
-                /// Approximate a Polygon and save to contours_poly
+                // Approximate a Polygon and save to contours_poly
                 approxPolyDP( contours[i], contours_poly[i], accuracy, true );
 
-                /// If 4 sided
+                // If 4 sided
                 if(contours_poly[i].size()== 4 && isContourConvex(contours_poly[i]))
                 {
-
-                    //drawContours(dst, contours_poly,i, Scalar(255,0,0), 3, 8, hierarchy, 0, Point() );
 
                     for ( int j = 0; j < 4; j++ )
                     {
@@ -197,12 +201,19 @@ int main()
                                         swap ( contours_poly[i][3], contours_poly[i][j] );
                     }
 
+                    for (int k = 0; k < 4; k++)
+                    {
+                        pt[k] = contours_poly[i][k];
+                    }
 
-                    /// test aspect ratio
-                    Ratio_Top = length(contours_poly[i][0].x, contours_poly[i][0].y, contours_poly[i][1].x, contours_poly[i][1].y);
-                    Ratio_Bottom = length(contours_poly[i][2].x, contours_poly[i][2].y, contours_poly[i][3].x, contours_poly[i][3].y);
-                    Ratio_Left = length(contours_poly[i][0].x, contours_poly[i][0].y, contours_poly[i][2].x, contours_poly[i][2].y);
-                    Ratio_Right = length(contours_poly[i][1].x, contours_poly[i][1].y, contours_poly[i][3].x, contours_poly[i][3].y);
+                    // organize corners
+                    T2B_L2R(pt);
+
+                    // test aspect ratio
+                    Ratio_Top = length(pt[0].x, pt[0].y, pt[1].x, pt[1].y);
+                    Ratio_Bottom = length(pt[2].x, pt[2].y, pt[3].x, pt[3].y);
+                    Ratio_Left = length(pt[0].x, pt[0].y, pt[2].x, pt[2].y);
+                    Ratio_Right = length(pt[1].x, pt[1].y, pt[3].x, pt[3].y);
 
                     if ( (Ratio_Left + Ratio_Right) < 10.0) //not a target
                     {
@@ -210,20 +221,25 @@ int main()
                     }
                     else
                     {
-                        Ratio = (Ratio_Left + Ratio_Right)/(Ratio_Top + Ratio_Bottom);
+                        Ratio = (Ratio_Top + Ratio_Bottom)/(Ratio_Left + Ratio_Right);
                     }
                     cout << "Ratio found: " << Ratio << endl;
-                    if (Ratio > 2) //subject to change
+                    if (Ratio < 1) //subject to change
                     {
                         //contour is a tall, skinny one
-                        //save off as stationary target
+                        //save off as static target
                         Static_Target.push_back(contours[i]);
-                    } else {
+                        drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
+
+                    }
+                    else
+                    {
                         //contour is the short, long, dynamic target
                         //save off as dynamic target
                         Dynamic_Target.push_back(contours[i]);
-                    }
+                        drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
 
+                    }
 //                    //what if we see all 4?
 //                    if (contours.size() != 3)
 //                    {
@@ -296,9 +312,25 @@ int main()
         putText(dst, str,Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         sprintf(str, "Average FPS = %.f", time_ave);
         putText(dst, str,Point(5,30), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        sprintf(str, "Case = %.f", targetCase);
+        string caseStr;
+        switch (targetCase) {
+        case NONE:
+            caseStr = "None";
+            break;
+        case LEFT:
+            caseStr = "Left";
+            break;
+        case RIGHT:
+            caseStr = "Right";
+            break;
+        case ALL:
+            caseStr = "Both";
+            break;
+        }
+
+        sprintf(str, "Case = %s", caseStr.c_str());
         putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        sprintf(str, "Targets S:%.f D:%.f", Static_Target.size(), Dynamic_Target.size());
+        sprintf(str, "Targets S:%d D:%d", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
 
 
