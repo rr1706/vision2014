@@ -85,10 +85,11 @@ int main()
     int value_max = 255;
 
     // for approxpolydp
-    const int accuracy = 3; //maximum distance between the original curve and its approximation
+    const int accuracy = 4; //maximum distance between the original curve and its approximation
 
     // create a storage for the corners for ration test
     CvPoint pt[4];
+    CvPoint2D32f cornersubpix[4];
 
     // Declare Timing and create variables to store frame times
     DECLARE_TIMING(FPS);
@@ -101,9 +102,14 @@ int main()
     // for key presses
     char ch;
 
+    // Set the neeed parameters to find the refined corners
+    Size winSize = Size( 5, 5 );
+    Size zeroZone = Size( -1, -1 );
+    TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
+
 #if USE_CAMERA
     // Initialize Camera and cv::Mat to hold images
-    CvCapture* capture0 = cvCreateCameraCapture(0);
+    CvCapture* capture0 = cvCreateCameraCapture(1);
     assert( capture0);
 #endif
 
@@ -156,16 +162,20 @@ int main()
         erode(img, img, NULL);
         dilate(img, img, NULL);
 
+
         // Declare containers for contours and contour heirarchy
         vector<vector<Point> > contours;
+        vector<Point2f> corners;
         vector<vector<Point> > Static_Target;
         vector<vector<Point> > Dynamic_Target;
         vector<Vec4i> hierarchy;
+
 
         findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
 
         // Declare container for approximated polygons
         vector<vector<Point> > contours_poly( contours.size() );
+        vector<Rect> boundRect( contours.size() );
 
         double Ratio;
         double Ratio_Top;
@@ -201,13 +211,32 @@ int main()
                                         swap ( contours_poly[i][3], contours_poly[i][j] );
                     }
 
+                    boundRect[i] = boundingRect(contours_poly[i]);
+
+                    rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
+
+                    if (boundRect[i].width > boundRect[i].height) //dyanmic target
+                    {
+                        sprintf(str, "Width = %d", boundRect[i].width);
+                        putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+                    }
+                     else //static target
+                    {
+                        sprintf(str, "Height = %d", boundRect[i].height);
+                        putText(dst, str,Point(5,110), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+                    }
                     for (int k = 0; k < 4; k++)
                     {
                         pt[k] = contours_poly[i][k];
+                        corners.push_back(contours_poly[i][k]);
                     }
 
                     // organize corners
                     T2B_L2R(pt);
+
+                    // Calculate the refined corner locations
+                    cornerSubPix( img, corners, winSize, zeroZone, criteria );
+
 
                     // test aspect ratio
                     Ratio_Top = length(pt[0].x, pt[0].y, pt[1].x, pt[1].y);
@@ -223,33 +252,34 @@ int main()
                     {
                         Ratio = (Ratio_Top + Ratio_Bottom)/(Ratio_Left + Ratio_Right);
                     }
-                    cout << "Ratio found: " << Ratio << endl;
+
+                    //what if we see all 4?
+                    //                    if (contours.size() != 3)
+                    //                    {
+                    //                    if (contours_poly.size() < 4)
+                    //                    {
+                    //case 1 or 2
                     if (Ratio < 1) //subject to change
                     {
-                        //contour is a tall, skinny one
+                        //contour is a tall and skinny one
                         //save off as static target
                         Static_Target.push_back(contours[i]);
                         drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
+                        for( int i = 0; i < 4; i++ )
+                        { cout<<" -- Static Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
 
                     }
                     else
                     {
-                        //contour is the short, long, dynamic target
+                        //contour is the short and wide, dynamic target
                         //save off as dynamic target
                         Dynamic_Target.push_back(contours[i]);
+                        for( int i = 0; i < 4; i++ )
+                        { cout<<" -- Dynamic Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
                         drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
 
                     }
-//                    //what if we see all 4?
-//                    if (contours.size() != 3)
-//                    {
-//                        if (contours.size() < 4)
-//                        {
-//                            //case 1 or 2
-//                        }
-//                    }
-
-                    // Order targets left to right
+                    // }
 
                 }
 
@@ -332,7 +362,9 @@ int main()
         putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         sprintf(str, "Targets S:%d D:%d", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-
+        for (int i = 0; i < corners.size(); i++ ) {
+            cout<<" -- Refined Corner ["<<i<<"]  ("<<corners[i].x<<","<<corners[i].y<<")"<<endl;
+        }
 
         /// Show Images
         imshow("Raw", img);
