@@ -77,7 +77,7 @@ void T2B_L2R(CvPoint* pt)
 int main()
 {
     // Values for inrange
-    int hue_min = 70;
+    int hue_min = 60;
     int saturation_min = 30;
     int value_min = 155;
     int hue_max = 255;
@@ -225,18 +225,24 @@ int main()
                         sprintf(str, "Height = %d", boundRect[i].height);
                         putText(dst, str,Point(5,110), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
                     }
+                    vector<Point2f> localCorners;
                     for (int k = 0; k < 4; k++)
                     {
                         pt[k] = contours_poly[i][k];
-                        corners.push_back(contours_poly[i][k]);
                     }
+
+
 
                     // organize corners
                     T2B_L2R(pt);
+                    for (int k = 0; k < 4; k++)
+                    {
+                        localCorners.push_back(pt[k]);
+                    }
 
                     // Calculate the refined corner locations
-                    cornerSubPix( img, corners, winSize, zeroZone, criteria );
-
+                    cornerSubPix( img, localCorners, winSize, zeroZone, criteria );
+                    corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
                     // test aspect ratio
                     Ratio_Top = length(pt[0].x, pt[0].y, pt[1].x, pt[1].y);
