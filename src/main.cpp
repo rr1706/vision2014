@@ -100,10 +100,11 @@ int main()
     // for approxpolydp
     const int accuracy = 9; //maximum distance between the original curve and its approximation
 
+    const float calibrationRange = 15; // inches
+    const float calibrationPixels = 100; // pixels
+
     // create a storage for the corners for ration test
     CvPoint pt[4];
-    CvPoint2D32f cornersubpix[4];
-
 
     // Define character to store a string of up to 50 characters, to be printed on the image
     char str[50];
@@ -284,7 +285,10 @@ int main()
                         drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
                         for( int i = 0; i < 4; i++ )
                         { cout<<" -- Static Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
-
+                        int lenTop = length(localCorners[0].x, localCorners[0].y, localCorners[1].x, localCorners[i].y);
+                        float distance = (calibrationRange / lenTop) * calibrationPixels;
+                        sprintf(str, "Length %dpx, distance %fin", lenTop, distance);
+                        statusText.push_back(str);
                     }
                     else
                     {
@@ -296,6 +300,9 @@ int main()
                         drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
 
                     }
+                    double area = contourArea(contours_poly[i]); // Cannot get to work with localCorners
+                    double areaBound = boundRect[i].area();
+                    cout << " -- Area " << area << ", bounding " << areaBound << endl;
                     // }
 
                 }
