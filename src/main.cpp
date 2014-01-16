@@ -75,6 +75,18 @@ void T2B_L2R(CvPoint* pt)
         pt[3].y = temp_y;
     }
 }
+
+void applyText(vector<string> &text, Point startPos, Mat &img)
+{
+    int x = startPos.x;
+    int y = startPos.y;
+    std::vector<string>::const_iterator iterator;
+    for (iterator = text.begin(); iterator != text.end(); ++iterator) {
+        putText(img, (*iterator).c_str(), Point(x, y), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        y += 20;
+    }
+}
+
 int main()
 {
     // Values for inrange
@@ -179,6 +191,7 @@ int main()
         double Ratio_Bottom;
         double Ratio_Right;
         double Ratio_Left;
+        vector<string> statusText;
 
         // Create a for loop to go through each contour (i) one at a time
         for( unsigned int i = 0; i < contours.size(); i++ )
@@ -215,12 +228,13 @@ int main()
                     if (boundRect[i].width > boundRect[i].height) //dyanmic target
                     {
                         sprintf(str, "Width = %d", boundRect[i].width);
-                        putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+                        statusText.push_back(str);
                     }
                      else //static target
                     {
                         sprintf(str, "Height = %d", boundRect[i].height);
-                        putText(dst, str,Point(5,110), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+                        statusText.push_back(str);
+
                     }
                     vector<Point2f> localCorners;
                     for (int k = 0; k < 4; k++)
@@ -365,7 +379,7 @@ int main()
         for (int i = 0; i < corners.size(); i++ ) {
             cout<<" -- Refined Corner ["<<i<<"]  ("<<corners[i].x<<","<<corners[i].y<<")"<<endl;
         }
-
+        applyText(statusText, Point(5, 90), dst);
         /// Show Images
         imshow("Raw", img);
         imshow("HSV", thresh);
