@@ -13,8 +13,8 @@ using namespace std;
 
 #define Minimum_Area 500
 #define ESC 27
-#define LOAD_IMAGE 1
-#define USE_CAMERA 0
+#define USE_CAMERA 1
+#define CAMERA 0
 enum TargetCase {
     NONE = 0,
     ALL = 1,
@@ -85,7 +85,7 @@ int main()
     int value_max = 255;
 
     // for approxpolydp
-    const int accuracy = 4; //maximum distance between the original curve and its approximation
+    const int accuracy = 9; //maximum distance between the original curve and its approximation
 
     // create a storage for the corners for ration test
     CvPoint pt[4];
@@ -99,19 +99,18 @@ int main()
     // Define character to store a string of up to 50 characters, to be printed on the image
     char str[50];
 
-    // for key presses
-    char ch;
-
     // Set the neeed parameters to find the refined corners
     Size winSize = Size( 5, 5 );
     Size zeroZone = Size( -1, -1 );
     TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
-
-#if USE_CAMERA
-    // Initialize Camera and cv::Mat to hold images
-    CvCapture* capture0 = cvCreateCameraCapture(1);
-    assert( capture0);
-#endif
+    VideoCapture camera;
+    if (USE_CAMERA) {
+        camera = VideoCapture(CAMERA);
+        if (!camera.isOpened()) {
+            cerr << "Failed to open camera device id:" << CAMERA << endl;
+            return -1;
+        }
+    }
 
     // Initialize a font, used for printed text onto an image
     CvFont font;
@@ -123,29 +122,30 @@ int main()
     namedWindow("HSV", CV_WINDOW_AUTOSIZE);
     namedWindow("Final", CV_WINDOW_AUTOSIZE);
 
-    if(LOAD_IMAGE)
-    {
+    if (!USE_CAMERA) {
         inframe = imread("raw_img.jpg");
     }
 
-#if ( USE_CAMERA == 1 )
     while ( 1 )
     {
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         START_TIMING(FPS);
 
         //Break out of loop if esc is pressed
-        if( (ch = waitKey(10) ) == ESC)
+        switch (char key = waitKey(10)) {
+        case ESC:
+            return 0;
             break;
+        case 's':
+            imwrite("raw_img.jpg", img);
+        }
 
-        // Grab a frame and contain it in the cv::Mat img
-        img = cvQueryFrame( capture0 );  //changes accroding to camera used
-        if ( ch == 's' )
-            imwrite ( "raw_img.jpg", img );
-#else
-    inframe.copyTo(img);
-    {
-#endif
+        if (USE_CAMERA) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
+            // Grab a frame and contain it in the cv::Mat img
+            camera >> img;
+        } else {
+            inframe.copyTo(img);
+        }
         // Store the original image img to the Mat dst
         img.copyTo(dst);
 
@@ -376,11 +376,10 @@ int main()
         imshow("Raw", img);
         imshow("HSV", thresh);
         imshow("Final", dst);
-
-#if ( USE_CAMERA == 0 )
-        waitKey();
-#endif
-
+        if (!USE_CAMERA) {
+            waitKey(); // pause
+            break;
+        }
     } /// <---- End of While Loop (ESC has to be pressed to break out of loop) otherwise loop
 
     /// Destroy all windows and return 0 to end the program
