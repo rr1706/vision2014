@@ -4,6 +4,7 @@
 #include "timer.h"
 #include <iostream>
 #include <fstream>
+#include <chrono>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -91,10 +92,6 @@ int main()
     CvPoint pt[4];
     CvPoint2D32f cornersubpix[4];
 
-    // Declare Timing and create variables to store frame times
-    DECLARE_TIMING(FPS);
-    double time_now;
-    double time_ave;
 
     // Define character to store a string of up to 50 characters, to be printed on the image
     char str[50];
@@ -129,7 +126,7 @@ int main()
     while ( 1 )
     {
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
-        START_TIMING(FPS);
+        auto start = std::chrono::high_resolution_clock::now();
 
         //Break out of loop if esc is pressed
         switch (char key = waitKey(10)) {
@@ -341,13 +338,10 @@ int main()
         }
 
         /// Stop timing and calculate FPS and Average FPS
-        STOP_TIMING(FPS);
-        time_now = 1000/GET_TIMING(FPS);
-        time_ave = 1000/GET_AVERAGE_TIMING(FPS);
-        sprintf(str, "Current FPS = %.f", time_now);
+        auto finish = std::chrono::high_resolution_clock::now();
+        double seconds = ((double) std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
+        sprintf(str, "FPS %d, per frame: %fs", (int) (1 / seconds), seconds);
         putText(dst, str,Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        sprintf(str, "Average FPS = %.f", time_ave);
-        putText(dst, str,Point(5,30), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         string caseStr;
         switch (targetCase) {
         case NONE:
