@@ -7,6 +7,7 @@
 #include <chrono>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include "util.hpp"
 
 /// OpenCV Namespace
 using namespace cv;
@@ -14,8 +15,8 @@ using namespace std;
 
 #define Minimum_Area 500
 #define ESC 27
-#define USE_CAMERA 1
-#define CAMERA 0
+#define USE_CAMERA 0
+#define CAMERA 1
 enum TargetCase {
     NONE = 0,
     ALL = 1,
@@ -23,10 +24,6 @@ enum TargetCase {
     LEFT = 3
 };
 
-float length(float x1, float y1, float x2, float y2)
-{
-    return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
-}
 
 void T2B_L2R(CvPoint* pt)
 {
@@ -100,8 +97,8 @@ int main()
     // for approxpolydp
     const int accuracy = 9; //maximum distance between the original curve and its approximation
 
-    const float calibrationRange = 15; // inches
-    const float calibrationPixels = 100; // pixels
+    const float calibrationRange = 2.724; // meters
+    const float calibrationPixels = 10; // pixels
 
     // create a storage for the corners for ration test
     CvPoint pt[4];
@@ -120,17 +117,16 @@ int main()
             cerr << "Failed to open camera device id:" << CAMERA << endl;
             return -1;
         }
+//        cout << "CV_CAP_PROP_FOURCC=" << camera.get(CV_CAP_PROP_FOURCC) << endl;
+        camera.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
+        camera.set(CV_CAP_PROP_FRAME_HEIGHT, 1080);
     }
-
-    // Initialize a font, used for printed text onto an image
-    CvFont font;
-    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, 0.75, 0, 1, CV_AA);
 
     Mat img, dst, thresh, inframe;
     // Create Windows
     namedWindow("Raw", CV_WINDOW_AUTOSIZE);
     namedWindow("HSV", CV_WINDOW_AUTOSIZE);
-    namedWindow("Final", CV_WINDOW_AUTOSIZE);
+    namedWindow("Final", CV_WINDOW_NORMAL);
 
     if (!USE_CAMERA) {
         inframe = imread("raw_img.jpg");
@@ -169,8 +165,8 @@ int main()
         img.copyTo(thresh);
 
         // Get rid of remaining noise
-        erode(img, img, NULL);
-        dilate(img, img, NULL);
+        erode(img, img, 0.0);
+        dilate(img, img, 0.0);
 
 
         // Declare containers for contours and contour heirarchy
@@ -207,20 +203,28 @@ int main()
                 if(contours_poly[i].size()== 4 && isContourConvex(contours_poly[i]))
                 {
 
-                    for ( int j = 0; j < 4; j++ )
-                    {
-                        if ( contours_poly[i][j].x < contours_poly[i][0].x )
-                            swap ( contours_poly[i][0], contours_poly[i][j] );
-                        else
-                            if ( contours_poly[i][j].y < contours_poly[i][1].y )
-                                swap ( contours_poly[i][1], contours_poly[i][j] );
-                            else
-                                if ( contours_poly[i][j].x > contours_poly[i][2].x )
-                                    swap ( contours_poly[i][2], contours_poly[i][j] );
-                                else
-                                    if ( contours_poly[i][j].y > contours_poly[i][3].y )
-                                        swap ( contours_poly[i][3], contours_poly[i][j] );
-                    }
+//                    cout << "Before values: " << endl;
+//                    for ( int j = 0; j < 4; j++ ) {
+//                        cout << contours_poly[i][j] << endl;
+//                    }
+//                    for ( int j = 0; j < 4; j++ )
+//                    {
+//                        if ( contours_poly[i][j].x < contours_poly[i][0].x )
+//                            swap ( contours_poly[i][0], contours_poly[i][j] );
+//                        else
+//                            if ( contours_poly[i][j].y < contours_poly[i][1].y )
+//                                swap ( contours_poly[i][1], contours_poly[i][j] );
+//                            else
+//                                if ( contours_poly[i][j].x > contours_poly[i][2].x )
+//                                    swap ( contours_poly[i][2], contours_poly[i][j] );
+//                                else
+//                                    if ( contours_poly[i][j].y > contours_poly[i][3].y )
+//                                        swap ( contours_poly[i][3], contours_poly[i][j] );
+//                    }
+//                    cout << "After values: " << endl;
+//                    for ( int j = 0; j < 4; j++ ) {
+//                        cout << contours_poly[i][j] << endl;
+//                    }
 
                     boundRect[i] = boundingRect(contours_poly[i]);
 
@@ -257,10 +261,10 @@ int main()
                     corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
                     // test aspect ratio
-                    Ratio_Top = length(pt[0].x, pt[0].y, pt[1].x, pt[1].y);
-                    Ratio_Bottom = length(pt[2].x, pt[2].y, pt[3].x, pt[3].y);
-                    Ratio_Left = length(pt[0].x, pt[0].y, pt[2].x, pt[2].y);
-                    Ratio_Right = length(pt[1].x, pt[1].y, pt[3].x, pt[3].y);
+                    Ratio_Top = distance(pt[0], pt[1]);
+                    Ratio_Bottom = distance(pt[2], pt[3]);
+                    Ratio_Left = distance(pt[0], pt[2]);
+                    Ratio_Right = distance(pt[1], pt[3]);
 
                     if ( (Ratio_Left + Ratio_Right) < 10.0) //not a target
                     {
@@ -277,6 +281,15 @@ int main()
                     //                    if (contours_poly.size() < 4)
                     //                    {
                     //case 1 or 2
+                    cout << "Print values: " << endl;
+                    for ( int j = 0; j < 4; j++ ) {
+                        cout << localCorners[j] << endl;
+                    }
+                    cout << "Print values: " << endl;
+                    for ( int j = 0; j < 4; j++ ) {
+                        cout << "[" << pt[j].x << "," << pt[j].y << "]" << endl;
+                    }
+
                     if (Ratio < 1) //subject to change
                     {
                         //contour is a tall and skinny one
@@ -285,9 +298,10 @@ int main()
                         drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
                         for( int i = 0; i < 4; i++ )
                         { cout<<" -- Static Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
-                        int lenTop = length(localCorners[0].x, localCorners[0].y, localCorners[1].x, localCorners[i].y);
-                        float distance = (calibrationRange / lenTop) * calibrationPixels;
-                        sprintf(str, "Length %dpx, distance %fin", lenTop, distance);
+                        int lengthStaticTop = distance(localCorners[0], localCorners[1]);
+//                        int lenTop = boundRect[i].height;
+                        float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
+                        sprintf(str, "Length %dpixels, distance %fmeters", lengthStaticTop, distanceToTarget);
                         statusText.push_back(str);
                     }
                     else
@@ -381,9 +395,9 @@ int main()
 
         sprintf(str, "Case = %s", caseStr.c_str());
         putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        sprintf(str, "Targets S:%d D:%d", Static_Target.size(), Dynamic_Target.size());
+        sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        for (int i = 0; i < corners.size(); i++ ) {
+        for (unsigned long i = 0; i < corners.size(); i++ ) {
             cout<<" -- Refined Corner ["<<i<<"]  ("<<corners[i].x<<","<<corners[i].y<<")"<<endl;
         }
         applyText(statusText, Point(5, 90), dst);

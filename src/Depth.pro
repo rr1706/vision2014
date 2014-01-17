@@ -26,4 +26,5 @@ QMAKE_CXXFLAGS += -std=c++11
 
 HEADERS += \
     libfreenect_cv.h \
-    timer.h
+    timer.h \
+    util.hpp
