@@ -43,7 +43,7 @@ std::string xyz(const cv::Point p1)
 
 bool isAlmostSquare ( const double ratio )
 {
-    return ( ratio < 2 && ratio > 0.5 );
+    return ( ratio < 3 && ratio > 0.5 );
 }
 
 bool isExtraLong(const double ratio)

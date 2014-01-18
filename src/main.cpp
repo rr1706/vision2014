@@ -13,9 +13,9 @@
 using namespace cv;
 using namespace std;
 const int ESC = 27;
-const int contourMinArea = 1;
-const Mode mode = VIDEO;
-const int cameraId = 0;
+const int contourMinArea = 500;
+const Mode mode = IMAGE;
+const int cameraId = 1;
 const string videoPath = "Y400cmX646cm.avi";
 
 void T2B_L2R(CvPoint* pt)
@@ -112,6 +112,7 @@ int main()
         }
         camera.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
         camera.set(CV_CAP_PROP_FRAME_HEIGHT, 1080);
+        camera.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M','J','P','G'));
     } else if (mode == VIDEO) {
         camera = VideoCapture(videoPath);
         if (!camera.isOpened()) {
@@ -198,85 +199,102 @@ int main()
         double lengthRight;
         double lengthLeft;
         vector<string> statusText;
+        int totalContours = contours.size();
+        int failedArea = 0;
+        int failedHierarchy = 0;
+        int failedSize = 0;
+        int failedConvex = 0;
+        int failedSquare = 0;
+        int failedVLarge = 0;
+        int success = 0;
 
         // Create a for loop to go through each contour (i) one at a time
         for( unsigned int i = 0; i < contours.size(); i++ )
         {
-            // If contour has an area greater than 500 pixels
-            if(contourArea(contours[i]) > contourMinArea && hierarchy[i][0] > 0)
+            // Very small contours (noise)
+            if (contourArea(contours[i]) < contourMinArea) {
+                failedArea++;
+                continue;
+            }
+            // Contours that have an interior contour
+            if (hierarchy[i][0] <= 0) {
+                failedHierarchy++;
+                continue;
+            }
+            approxPolyDP( contours[i], contours_poly[i], accuracy, true );
+            // Polygon does not have four sizes
+            if (contours_poly[i].size() != 4) {
+                failedSize++;
+                continue;
+            }
+            // Non-regular polygons
+            if (!isContourConvex(contours_poly[i])) {
+                failedConvex++;
+                continue;
+            }
+            boundRect[i] = boundingRect(contours_poly[i]);
+            rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
+
+            // ratio helps determine orientation of rectangle (vertical / horizontal)
+            ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
+            if (isAlmostSquare(ratio)) {
+                failedSquare++;
+                continue; // go to next contour
+            } else if (isExtraLong(ratio)) {
+                failedVLarge++;
+                continue;
+            }
+
+            vector<Point2f> localCorners;
+            for (int k = 0; k < 4; k++)
             {
-                // Approximate a Polygon and save to contours_poly
-                approxPolyDP( contours[i], contours_poly[i], accuracy, true );
-
-                // If 4 sided
-                if(contours_poly[i].size()== 4 && isContourConvex(contours_poly[i]))
-                {
-
-                    boundRect[i] = boundingRect(contours_poly[i]);
-                    rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
-
-                    // ratio helps determine orientation of rectangle (vertical / horizontal)
-                    ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
-                    if (isAlmostSquare(ratio)) {
-                        cout << "Ignoring ratio " << ratio << ": is like a square" << endl;
-                        continue; // go to next contour
-                    } else if (isExtraLong(ratio)) {
-                        cout << "Ignoring ratio " << ratio << ": is longer than a target" << endl;
-                    } else {
-                        cout << "Ratio of " << ratio << " is a target" << endl;
-                    }
-
-                    vector<Point2f> localCorners;
-                    for (int k = 0; k < 4; k++)
-                    {
-                        pt[k] = contours_poly[i][k];
-                    }
+                pt[k] = contours_poly[i][k];
+            }
 
 
 
-                    // organize corners
-                    T2B_L2R(pt);
-                    for (int k = 0; k < 4; k++)
-                    {
-                        localCorners.push_back(pt[k]);
-                    }
+            // organize corners
+            T2B_L2R(pt);
+            for (int k = 0; k < 4; k++)
+            {
+                localCorners.push_back(pt[k]);
+            }
 
-                    // Calculate the refined corner locations
-                    cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
-                    corners.insert(corners.end(), localCorners.begin(), localCorners.end());
+            // Calculate the refined corner locations
+            cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
+            corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
-                    // test aspect ratio
-                    lengthTop = distance(pt[0], pt[1]);
-                    lengthBottom = distance(pt[2], pt[3]);
-                    lengthLeft = distance(pt[0], pt[2]);
-                    lengthRight = distance(pt[1], pt[3]);
-
-                    if (ratio < 1) //subject to change
-                    {
-                        //contour is a tall and skinny one
-                        //save off as static target
-                        Static_Target.push_back(contours[i]);
-                        drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
-                        sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
-                        statusText.push_back(str);
-                        int lengthStaticTop = distance(localCorners[0], localCorners[1]);
-                        float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
-                        sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
-                        statusText.push_back(str);
-                        sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
-                        statusText.push_back(str);
-                    }
-                    else
-                    {
-                        //contour is the short and wide, dynamic target
-                        //save off as dynamic target
-                        Dynamic_Target.push_back(contours[i]);
-                        drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
-                    }
-                }
-
+            // test aspect ratio
+            lengthTop = distance(pt[0], pt[1]);
+            lengthBottom = distance(pt[2], pt[3]);
+            lengthLeft = distance(pt[0], pt[2]);
+            lengthRight = distance(pt[1], pt[3]);
+            success++;
+            if (ratio < 1) //subject to change
+            {
+                //contour is a tall and skinny one
+                //save off as static target
+                Static_Target.push_back(contours[i]);
+                drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
+                sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
+                statusText.push_back(str);
+                int lengthStaticTop = distance(localCorners[0], localCorners[1]);
+                float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
+                sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
+                statusText.push_back(str);
+                sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
+                statusText.push_back(str);
+            }
+            else
+            {
+                //contour is the short and wide, dynamic target
+                //save off as dynamic target
+                Dynamic_Target.push_back(contours[i]);
+                drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
             }
         }
+        cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
+                " Size: " << failedSize << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
 
         /// calculate center
         vector<Moments> Moment_Center_Static(Static_Target.size() );
