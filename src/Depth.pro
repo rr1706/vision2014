@@ -17,14 +17,10 @@ CONFIG   -= app_bundle
 TEMPLATE = app
 
 SOURCES += \
-    libfreenect_cv.c \
     main.cpp
 
-INCLUDEPATH += /usr/local/include/libfreenect /usr/lib
-LIBS += -lfreenect_sync -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_calib3d
+LIBS += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_calib3d
 QMAKE_CXXFLAGS += -std=c++11
 
 HEADERS += \
-    libfreenect_cv.h \
-    timer.h \
     util.hpp

@@ -1,9 +1,9 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <stdio.h>
-#include "timer.h"
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <chrono>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -87,10 +87,10 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
 int main()
 {
     // Values for inrange
-    int hue_min = 60;
-    int saturation_min = 30;
+    int hue_min = 35;
+    int saturation_min = 0;
     int value_min = 155;
-    int hue_max = 255;
+    int hue_max = 90;
     int saturation_max = 255;
     int value_max = 255;
 
@@ -141,7 +141,7 @@ int main()
             // Grab a frame and contain it in the cv::Mat img
             camera >> img;
         } else {
-            inframe.copyTo(img);
+            img = inframe.clone();
         }
 
         //Break out of loop if esc is pressed
@@ -184,11 +184,11 @@ int main()
         vector<vector<Point> > contours_poly( contours.size() );
         vector<Rect> boundRect( contours.size() );
 
-        double Ratio;
-        double Ratio_Top;
-        double Ratio_Bottom;
-        double Ratio_Right;
-        double Ratio_Left;
+        double ratio;
+        double lengthTop;
+        double lengthBottom;
+        double lengthRight;
+        double lengthLeft;
         vector<string> statusText;
 
         // Create a for loop to go through each contour (i) one at a time
@@ -203,29 +203,6 @@ int main()
                 // If 4 sided
                 if(contours_poly[i].size()== 4 && isContourConvex(contours_poly[i]))
                 {
-
-//                    cout << "Before values: " << endl;
-//                    for ( int j = 0; j < 4; j++ ) {
-//                        cout << contours_poly[i][j] << endl;
-//                    }
-//                    for ( int j = 0; j < 4; j++ )
-//                    {
-//                        if ( contours_poly[i][j].x < contours_poly[i][0].x )
-//                            swap ( contours_poly[i][0], contours_poly[i][j] );
-//                        else
-//                            if ( contours_poly[i][j].y < contours_poly[i][1].y )
-//                                swap ( contours_poly[i][1], contours_poly[i][j] );
-//                            else
-//                                if ( contours_poly[i][j].x > contours_poly[i][2].x )
-//                                    swap ( contours_poly[i][2], contours_poly[i][j] );
-//                                else
-//                                    if ( contours_poly[i][j].y > contours_poly[i][3].y )
-//                                        swap ( contours_poly[i][3], contours_poly[i][j] );
-//                    }
-//                    cout << "After values: " << endl;
-//                    for ( int j = 0; j < 4; j++ ) {
-//                        cout << contours_poly[i][j] << endl;
-//                    }
 
                     boundRect[i] = boundingRect(contours_poly[i]);
 
@@ -246,57 +223,36 @@ int main()
                     }
 
                     // Calculate the refined corner locations
-                    cornerSubPix( img, localCorners, winSize, zeroZone, criteria );
+                    cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
                     corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
                     // test aspect ratio
-                    Ratio_Top = distance(pt[0], pt[1]);
-                    Ratio_Bottom = distance(pt[2], pt[3]);
-                    Ratio_Left = distance(pt[0], pt[2]);
-                    Ratio_Right = distance(pt[1], pt[3]);
+                    lengthTop = distance(pt[0], pt[1]);
+                    lengthBottom = distance(pt[2], pt[3]);
+                    lengthLeft = distance(pt[0], pt[2]);
+                    lengthRight = distance(pt[1], pt[3]);
 
-                    if ( (Ratio_Left + Ratio_Right) < 10.0) //not a target
-                    {
-                        Ratio = 0;
-                    }
-                    else
-                    {
-                        Ratio = (Ratio_Top + Ratio_Bottom)/(Ratio_Left + Ratio_Right);
-                    }
-                    if (Ratio < 2 && Ratio > 0.5) {
-                        cout << "Ignoring ratio " << Ratio << endl;
-                        continue;
+                    // ratio helps determine orientation of rectangle (vertical / horizontal)
+                    ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
+                    if (isAlmostSquare(ratio)) {
+                        cout << "Ignoring ratio " << ratio << endl;
+                        continue; // go to next contour
                     } else {
-                        cout << "Ratio of " << Ratio << " is a target" << endl;
+                        cout << "Ratio of " << ratio << " is a target" << endl;
                     }
-
-                    //what if we see all 4?
-                    //                    if (contours.size() != 3)
-                    //                    {
-                    //                    if (contours_poly.size() < 4)
-                    //                    {
-                    //case 1 or 2
-                    cout << "Print values: " << endl;
-                    for ( int j = 0; j < 4; j++ ) {
-                        cout << localCorners[j] << endl;
-                    }
-                    cout << "Print values: " << endl;
-                    for ( int j = 0; j < 4; j++ ) {
-                        cout << "[" << pt[j].x << "," << pt[j].y << "]" << endl;
-                    }
-
-                    if (Ratio < 1) //subject to change
+                    if (ratio < 1) //subject to change
                     {
                         //contour is a tall and skinny one
                         //save off as static target
                         Static_Target.push_back(contours[i]);
                         drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
-                        for( int i = 0; i < 4; i++ )
-                        { cout<<" -- Static Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
+                        sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
+                        statusText.push_back(str);
                         int lengthStaticTop = distance(localCorners[0], localCorners[1]);
-//                        int lenTop = boundRect[i].height;
                         float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
-                        sprintf(str, "R:%d L:%dpx D:%fm", Ratio, lengthStaticTop, distanceToTarget);
+                        sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
+                        statusText.push_back(str);
+                        sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
                         statusText.push_back(str);
                     }
                     else
@@ -304,16 +260,8 @@ int main()
                         //contour is the short and wide, dynamic target
                         //save off as dynamic target
                         Dynamic_Target.push_back(contours[i]);
-                        for( int i = 0; i < 4; i++ )
-                        { cout<<" -- Dynamic Target Original ["<<i<<"]  ("<<pt[i].x<<","<<pt[i].y<<")"<<endl; }
                         drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
-
                     }
-                    double area = contourArea(contours_poly[i]); // Cannot get to work with localCorners
-                    double areaBound = boundRect[i].area();
-                    cout << " -- Area " << area << ", bounding " << areaBound << endl;
-                    // }
-
                 }
 
             }
@@ -392,17 +340,21 @@ int main()
         putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        for (unsigned long i = 0; i < corners.size(); i++ ) {
-            cout<<" -- Refined Corner ["<<i<<"]  ("<<corners[i].x<<","<<corners[i].y<<")"<<endl;
-        }
         applyText(statusText, Point(5, 90), dst);
         /// Show Images
         imshow("Raw", img);
         imshow("HSV", thresh);
         imshow("Final", dst);
         if (!USE_CAMERA) {
-            waitKey(); // pause
-            break;
+            char k = waitKey(); // pause
+            if (k >= '0' && k <= '9') {
+                stringstream filename;
+                filename << "raw_img_" << k << ".jpg";
+                inframe = imread(filename.str());
+                continue;
+            } else {
+                break;
+            }
         }
     } /// <---- End of While Loop (ESC has to be pressed to break out of loop) otherwise loop
 
