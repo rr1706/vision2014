@@ -12,18 +12,11 @@
 /// OpenCV Namespace
 using namespace cv;
 using namespace std;
-
-#define Minimum_Area 500
-#define ESC 27
-#define USE_CAMERA 1
-#define CAMERA 0
-enum TargetCase {
-    NONE = 0,
-    ALL = 1,
-    RIGHT = 2,
-    LEFT = 3
-};
-
+const int ESC = 27;
+const int contourMinArea = 1;
+const Mode mode = VIDEO;
+const int cameraId = 0;
+const string videoPath = "Y400cmX646cm.avi";
 
 void T2B_L2R(CvPoint* pt)
 {
@@ -88,8 +81,8 @@ int main()
 {
     // Values for inrange
     int hue_min = 35;
-    int saturation_min = 0;
-    int value_min = 155;
+    int saturation_min = 10;
+    int value_min = 140;
     int hue_max = 90;
     int saturation_max = 255;
     int value_max = 255;
@@ -111,15 +104,20 @@ int main()
     Size zeroZone = Size( -1, -1 );
     TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
     VideoCapture camera;
-    if (USE_CAMERA) {
-        camera = VideoCapture(CAMERA);
+    if (mode == CAMERA) {
+        camera = VideoCapture(cameraId);
         if (!camera.isOpened()) {
-            cerr << "Failed to open camera device id:" << CAMERA << endl;
+            cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-//        cout << "CV_CAP_PROP_FOURCC=" << camera.get(CV_CAP_PROP_FOURCC) << endl;
         camera.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
         camera.set(CV_CAP_PROP_FRAME_HEIGHT, 1080);
+    } else if (mode == VIDEO) {
+        camera = VideoCapture(videoPath);
+        if (!camera.isOpened()) {
+            cerr << "Failed to open video path:" << videoPath << endl;
+            return -1;
+        }
     }
 
     Mat img, dst, thresh, inframe;
@@ -128,7 +126,7 @@ int main()
     namedWindow("HSV", CV_WINDOW_AUTOSIZE);
     namedWindow("Final", CV_WINDOW_NORMAL);
 
-    if (!USE_CAMERA) {
+    if (mode == IMAGE) {
         inframe = imread("raw_img.jpg");
     }
 
@@ -137,9 +135,13 @@ int main()
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
-        if (USE_CAMERA) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
+        if (mode == CAMERA || mode == VIDEO) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
             // Grab a frame and contain it in the cv::Mat img
             camera >> img;
+            if (&img == NULL) {
+                cerr << "Video stream ended abruptly." << endl;
+                return -1;
+            }
         } else {
             img = inframe.clone();
         }
@@ -151,6 +153,12 @@ int main()
             break;
         case 's':
             imwrite("raw_img.jpg", img);
+            break;
+        case ' ':
+            for (int gi = 0; gi < 20; gi++) {
+                camera >> img;
+            }
+            break;
         }
 
         // Store the original image img to the Mat dst
@@ -195,7 +203,7 @@ int main()
         for( unsigned int i = 0; i < contours.size(); i++ )
         {
             // If contour has an area greater than 500 pixels
-            if(contourArea(contours[i])>Minimum_Area)
+            if(contourArea(contours[i]) > contourMinArea && hierarchy[i][0] > 0)
             {
                 // Approximate a Polygon and save to contours_poly
                 approxPolyDP( contours[i], contours_poly[i], accuracy, true );
@@ -205,8 +213,19 @@ int main()
                 {
 
                     boundRect[i] = boundingRect(contours_poly[i]);
-
                     rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
+
+                    // ratio helps determine orientation of rectangle (vertical / horizontal)
+                    ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
+                    if (isAlmostSquare(ratio)) {
+                        cout << "Ignoring ratio " << ratio << ": is like a square" << endl;
+                        continue; // go to next contour
+                    } else if (isExtraLong(ratio)) {
+                        cout << "Ignoring ratio " << ratio << ": is longer than a target" << endl;
+                    } else {
+                        cout << "Ratio of " << ratio << " is a target" << endl;
+                    }
+
                     vector<Point2f> localCorners;
                     for (int k = 0; k < 4; k++)
                     {
@@ -232,14 +251,6 @@ int main()
                     lengthLeft = distance(pt[0], pt[2]);
                     lengthRight = distance(pt[1], pt[3]);
 
-                    // ratio helps determine orientation of rectangle (vertical / horizontal)
-                    ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
-                    if (isAlmostSquare(ratio)) {
-                        cout << "Ignoring ratio " << ratio << endl;
-                        continue; // go to next contour
-                    } else {
-                        cout << "Ratio of " << ratio << " is a target" << endl;
-                    }
                     if (ratio < 1) //subject to change
                     {
                         //contour is a tall and skinny one
@@ -345,7 +356,7 @@ int main()
         imshow("Raw", img);
         imshow("HSV", thresh);
         imshow("Final", dst);
-        if (!USE_CAMERA) {
+        if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
                 stringstream filename;
