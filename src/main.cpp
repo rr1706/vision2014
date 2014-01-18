@@ -15,8 +15,8 @@ using namespace std;
 
 #define Minimum_Area 500
 #define ESC 27
-#define USE_CAMERA 0
-#define CAMERA 1
+#define USE_CAMERA 1
+#define CAMERA 0
 enum TargetCase {
     NONE = 0,
     ALL = 1,
@@ -137,6 +137,13 @@ int main()
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
+        if (USE_CAMERA) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
+            // Grab a frame and contain it in the cv::Mat img
+            camera >> img;
+        } else {
+            inframe.copyTo(img);
+        }
+
         //Break out of loop if esc is pressed
         switch (char key = waitKey(10)) {
         case ESC:
@@ -146,12 +153,6 @@ int main()
             imwrite("raw_img.jpg", img);
         }
 
-        if (USE_CAMERA) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
-            // Grab a frame and contain it in the cv::Mat img
-            camera >> img;
-        } else {
-            inframe.copyTo(img);
-        }
         // Store the original image img to the Mat dst
         img.copyTo(dst);
 
@@ -229,18 +230,6 @@ int main()
                     boundRect[i] = boundingRect(contours_poly[i]);
 
                     rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
-
-                    if (boundRect[i].width > boundRect[i].height) //dyanmic target
-                    {
-                        sprintf(str, "Width = %d", boundRect[i].width);
-                        statusText.push_back(str);
-                    }
-                     else //static target
-                    {
-                        sprintf(str, "Height = %d", boundRect[i].height);
-                        statusText.push_back(str);
-
-                    }
                     vector<Point2f> localCorners;
                     for (int k = 0; k < 4; k++)
                     {
@@ -274,6 +263,12 @@ int main()
                     {
                         Ratio = (Ratio_Top + Ratio_Bottom)/(Ratio_Left + Ratio_Right);
                     }
+                    if (Ratio < 2 && Ratio > 0.5) {
+                        cout << "Ignoring ratio " << Ratio << endl;
+                        continue;
+                    } else {
+                        cout << "Ratio of " << Ratio << " is a target" << endl;
+                    }
 
                     //what if we see all 4?
                     //                    if (contours.size() != 3)
@@ -301,7 +296,7 @@ int main()
                         int lengthStaticTop = distance(localCorners[0], localCorners[1]);
 //                        int lenTop = boundRect[i].height;
                         float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
-                        sprintf(str, "Length %dpixels, distance %fmeters", lengthStaticTop, distanceToTarget);
+                        sprintf(str, "R:%d L:%dpx D:%fm", Ratio, lengthStaticTop, distanceToTarget);
                         statusText.push_back(str);
                     }
                     else
