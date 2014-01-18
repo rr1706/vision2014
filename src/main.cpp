@@ -202,7 +202,7 @@ int main()
         int totalContours = contours.size();
         int failedArea = 0;
         int failedHierarchy = 0;
-        int failedSize = 0;
+        int failedSides = 0;
         int failedConvex = 0;
         int failedSquare = 0;
         int failedVLarge = 0;
@@ -222,9 +222,9 @@ int main()
                 continue;
             }
             approxPolyDP( contours[i], contours_poly[i], accuracy, true );
-            // Polygon does not have four sizes
+            // Polygon does not have four sides
             if (contours_poly[i].size() != 4) {
-                failedSize++;
+                failedSides++;
                 continue;
             }
             // Non-regular polygons
@@ -294,7 +294,7 @@ int main()
             }
         }
         cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
-                " Size: " << failedSize << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
+                " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
 
         /// calculate center
         vector<Moments> Moment_Center_Static(Static_Target.size() );
