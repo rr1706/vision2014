@@ -15,7 +15,7 @@ using namespace std;
 const int ESC = 27;
 const int contourMinArea = 500;
 const Mode mode = IMAGE;
-const int cameraId = 1;
+const int cameraId = 2;
 const string videoPath = "Y400cmX646cm.avi";
 
 void T2B_L2R(CvPoint* pt)
@@ -79,13 +79,9 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
 
 int main()
 {
-    // Values for inrange
-    int hue_min = 35;
-    int saturation_min = 10;
-    int value_min = 140;
-    int hue_max = 90;
-    int saturation_max = 255;
-    int value_max = 255;
+    // Values for threshold
+    const int gray_min = 245;
+    const int gray_max = 255;
 
     // for approxpolydp
     const int accuracy = 9; //maximum distance between the original curve and its approximation
@@ -110,9 +106,8 @@ int main()
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-        camera.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
-        camera.set(CV_CAP_PROP_FRAME_HEIGHT, 1080);
-        camera.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M','J','P','G'));
+        camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+        camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
         camera = VideoCapture(videoPath);
         if (!camera.isOpened()) {
@@ -123,12 +118,16 @@ int main()
 
     Mat img, dst, thresh, inframe;
     // Create Windows
-    namedWindow("Raw", CV_WINDOW_AUTOSIZE);
-    namedWindow("HSV", CV_WINDOW_AUTOSIZE);
     namedWindow("Final", CV_WINDOW_NORMAL);
 
+    int kern_mat[] = {1,0,1,
+                      0,1,0,
+                      1,0,1};
+    Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
+
+
     if (mode == IMAGE) {
-        inframe = imread("raw_img.jpg");
+        inframe = imread("raw_img_0.png");
     }
 
     while ( 1 )
@@ -166,17 +165,17 @@ int main()
         img.copyTo(dst);
 
         // Convert img from BGR(Blue,Green,Red) to HSV(Hue,Saturation,Value)
-        cvtColor(img,img,CV_BGR2HSV);
+        cvtColor(img,img,CV_BGR2GRAY);
+        imshow("IR", img);
 
         // "Threshold" image to pixels in the ranges
-        inRange(img,Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max),img);
-
-        // Save img to thresh Mat to show to the user
-        img.copyTo(thresh);
+        threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
+        imshow("Threshold", img);
 
         // Get rid of remaining noise
-        erode(img, img, 0.0);
-        dilate(img, img, 0.0);
+        dilate(img, img, kernel);
+        erode(img, img, kernel, Point(-1, -1), 2);
+        imshow("Dilate", img);
 
 
         // Declare containers for contours and contour heirarchy
