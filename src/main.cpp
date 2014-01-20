@@ -120,6 +120,7 @@ int main()
             return -1;
         }
     }
+    int currentSave = 0;
 
     Mat img, dst, thresh, inframe;
     // Create Windows
@@ -153,7 +154,9 @@ int main()
             return 0;
             break;
         case 's':
-            imwrite("raw_img.jpg", img);
+            sprintf(str, "raw_img_%d.png", currentSave);
+            imwrite(str, img);
+            currentSave++;
             break;
         case ' ':
             for (int gi = 0; gi < 20; gi++) {
@@ -371,14 +374,12 @@ int main()
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         applyText(statusText, Point(5, 90), dst);
         /// Show Images
-        imshow("Raw", img);
-        imshow("HSV", thresh);
         imshow("Final", dst);
         if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
                 stringstream filename;
-                filename << "raw_img_" << k << ".jpg";
+                filename << "raw_img_" << k << ".png";
                 inframe = imread(filename.str());
                 continue;
             } else {
