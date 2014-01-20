@@ -9,14 +9,22 @@
 #include <opencv2/highgui/highgui.hpp>
 #include "util.hpp"
 
-/// OpenCV Namespace
+#define FOV_Y 80//degrees
+#define FOV_X 117.5 //degrees
+#define IMAGE_HEIGHT 480
+#define IMAGE_WIDTH 640
+#define STATIC_TARGET_HEIGHT  32 //in
+
+// OpenCV Namespace
 using namespace cv;
 using namespace std;
+
+//constants
 const int ESC = 27;
-const int contourMinArea = 500;
-const Mode mode = CAMERA;
+const int contourMinArea = 50;
+const Mode mode = IMAGE;
 const int cameraId = 1;
-const CaptureMode inputType = COLOR;
+const CaptureMode inputType = IR;
 const string videoPath = "Y400cmX646cm.avi";
 
 void T2B_L2R(CvPoint* pt)
@@ -85,12 +93,24 @@ int main()
     const int gray_max = 255;
 
     // Values for threshold RGB
-    const int hue_min = 35;
-    const int hue_max = 90;
+    const int hue_min = 55;
     const int saturation_min = 10;
-    const int saturation_max = 255;
-    const int value_min = 140;
+    const int value_min = 190;
+    const int hue_max = 250;
+    const int saturation_max = 155;
     const int value_max = 255;
+    float FOV_X_Divided_Image_Width = FOV_X / IMAGE_WIDTH;
+    float Tan_FOV_Y_Half = 0.8390;
+    const float FOV_Y_DIV_HEIGHT = FOV_Y / IMAGE_HEIGHT;
+    float Image_Heigh_in;
+    float Plane_Distance;
+    float Real_Distance;
+
+    int kern_mat[] = {1,0,1,
+                      0,1,0,
+                      1,0,1};
+
+    Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
 
     // for approxpolydp
     const int accuracy = 9; //maximum distance between the original curve and its approximation
@@ -108,6 +128,7 @@ int main()
     Size winSize = Size( 5, 5 );
     Size zeroZone = Size( -1, -1 );
     TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
+
     VideoCapture camera;
     if (mode == CAMERA) {
         camera = VideoCapture(cameraId);
@@ -126,15 +147,11 @@ int main()
     }
     int currentSave = 0;
 
+    // Create Mat to store images
     Mat img, dst, thresh, inframe;
+
     // Create Windows
     namedWindow("Final", CV_WINDOW_NORMAL);
-
-    int kern_mat[] = {1,0,1,
-                      0,1,0,
-                      1,0,1};
-    Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
-
 
     if (mode == IMAGE) {
         inframe = imread("raw_img_0.png");
@@ -142,6 +159,17 @@ int main()
 
     while ( 1 )
     {
+        //reset variables
+        Plane_Distance = 0;
+        Image_Heigh_in = 0;
+        Real_Distance = 0;
+        int failedArea = 0;
+        int failedHierarchy = 0;
+        int failedSides = 0;
+        int failedConvex = 0;
+        int failedSquare = 0;
+        int failedVLarge = 0;
+        int success = 0;
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -198,6 +226,7 @@ int main()
         // Get rid of remaining noise
         dilate(img, img, kernel);
         erode(img, img, kernel, Point(-1, -1), 2);
+        dilate(img, img, kernel);
         imshow("Dilate", img);
 
 
@@ -208,8 +237,7 @@ int main()
         vector<vector<Point> > Dynamic_Target;
         vector<Vec4i> hierarchy;
 
-
-        findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
+        findContours(img, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
 
         // Declare container for approximated polygons
         vector<vector<Point> > contours_poly( contours.size() );
@@ -222,13 +250,6 @@ int main()
         double lengthLeft;
         vector<string> statusText;
         int totalContours = contours.size();
-        int failedArea = 0;
-        int failedHierarchy = 0;
-        int failedSides = 0;
-        int failedConvex = 0;
-        int failedSquare = 0;
-        int failedVLarge = 0;
-        int success = 0;
 
         // Create a for loop to go through each contour (i) one at a time
         for( unsigned int i = 0; i < contours.size(); i++ )
@@ -238,34 +259,40 @@ int main()
                 failedArea++;
                 continue;
             }
-            // Contours that have an interior contour
-            if (hierarchy[i][0] <= 0) {
-                failedHierarchy++;
-                continue;
-            }
+
+//            // Contours that have an interior contour
+//            if (hierarchy[i][0] <= 0) {
+//                failedHierarchy++;
+//                continue;
+//            }
+
+//            // Polygon does not have four sides
+//            if (contours_poly[i].size() != 4) {
+//                failedSides++;
+//                continue;
+//            }
+
             approxPolyDP( contours[i], contours_poly[i], accuracy, true );
-            // Polygon does not have four sides
-            if (contours_poly[i].size() != 4) {
-                failedSides++;
-                continue;
-            }
-            // Non-regular polygons
-            if (!isContourConvex(contours_poly[i])) {
-                failedConvex++;
-                continue;
-            }
+
+//            // Non-regular polygons
+//            if (!isContourConvex(contours_poly[i])) {
+//                failedConvex++;
+//                continue;
+//            }
+
             boundRect[i] = boundingRect(contours_poly[i]);
-            rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
 
             // ratio helps determine orientation of rectangle (vertical / horizontal)
             ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
             if (isAlmostSquare(ratio)) {
                 failedSquare++;
-                continue; // go to next contour
+                continue;
             } else if (isExtraLong(ratio)) {
                 failedVLarge++;
                 continue;
             }
+
+            rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
 
             vector<Point2f> localCorners;
             for (int k = 0; k < 4; k++)
@@ -273,10 +300,10 @@ int main()
                 pt[k] = contours_poly[i][k];
             }
 
-
-
             // organize corners
             T2B_L2R(pt);
+
+            //populate localCorners with pt
             for (int k = 0; k < 4; k++)
             {
                 localCorners.push_back(pt[k]);
@@ -292,6 +319,28 @@ int main()
             lengthLeft = distance(pt[0], pt[2]);
             lengthRight = distance(pt[1], pt[3]);
             success++;
+            int centerX = boundRect[i].x + boundRect[i].width / 2;
+            int centerY = boundRect[i].y + boundRect[i].height / 2;
+
+            if (boundRect[i].height > boundRect[i].width)
+            {
+                double Center_Static_X = -((IMAGE_WIDTH/2) - ( boundRect[i].x + (boundRect[i].width / 2))) ;
+//                double Center_Static_Y = -((boundRect[i].y + boundRect[i].width) - (IMAGE_HEIGHT/2));
+                double Center_Static_Y = -(centerY - (IMAGE_HEIGHT/2));
+                Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect[i].height;
+                Plane_Distance = (Image_Heigh_in * 0.5) / Tan_FOV_Y_Half;
+                double In_Screen_Angle_X = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+                double In_Screen_Angle_Y = (FOV_Y / IMAGE_HEIGHT) * Center_Static_Y;
+                double Real_Distance_X = Plane_Distance / (cos(In_Screen_Angle_X * CV_PI / 180));
+                Point isa(In_Screen_Angle_X, In_Screen_Angle_Y);
+                Real_Distance = Real_Distance_X / (cos(In_Screen_Angle_Y * CV_PI / 180));
+//                Real_Distance = sqrt(square(Real_Distance_X) + 256);
+                assert(Real_Distance >= 0);
+
+                sprintf(str, "IHi:%f PD:%f ISA:%s RD:%f", Image_Heigh_in, Plane_Distance, xyz(isa).c_str(), Real_Distance);
+                statusText.push_back(str);
+            }
+
             if (ratio < 1) //subject to change
             {
                 //contour is a tall and skinny one
@@ -304,7 +353,10 @@ int main()
                 float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
                 sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
                 statusText.push_back(str);
-                sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
+//                sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
+                sprintf(str, "H:%d L:%d", boundRect[i].height, boundRect[i].width);
+                statusText.push_back(str);
+                sprintf(str, "BRCX:%d BRCY:%d", boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height);
                 statusText.push_back(str);
             }
             else
@@ -392,7 +444,12 @@ int main()
         sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         applyText(statusText, Point(5, 90), dst);
-        /// Show Images
+
+        //draw crosshairs
+        line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
+        line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
+
+        // Show Images
         imshow("Final", dst);
         if (mode == IMAGE) {
             char k = waitKey(); // pause
