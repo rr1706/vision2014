@@ -17,6 +17,11 @@ enum TargetCase {
     LEFT = 3
 };
 
+enum CaptureMode {
+    IR = 0,
+    COLOR = 1
+};
+
 template<class T>
 T square ( T x )
 {

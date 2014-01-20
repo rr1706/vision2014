@@ -14,8 +14,9 @@ using namespace cv;
 using namespace std;
 const int ESC = 27;
 const int contourMinArea = 500;
-const Mode mode = IMAGE;
-const int cameraId = 2;
+const Mode mode = CAMERA;
+const int cameraId = 1;
+const CaptureMode inputType = COLOR;
 const string videoPath = "Y400cmX646cm.avi";
 
 void T2B_L2R(CvPoint* pt)
@@ -79,9 +80,17 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
 
 int main()
 {
-    // Values for threshold
+    // Values for threshold IR
     const int gray_min = 245;
     const int gray_max = 255;
+
+    // Values for threshold RGB
+    const int hue_min = 35;
+    const int hue_max = 90;
+    const int saturation_min = 10;
+    const int saturation_max = 255;
+    const int value_min = 140;
+    const int value_max = 255;
 
     // for approxpolydp
     const int accuracy = 9; //maximum distance between the original curve and its approximation
@@ -164,12 +173,23 @@ int main()
         // Store the original image img to the Mat dst
         img.copyTo(dst);
 
-        // Convert img from BGR(Blue,Green,Red) to HSV(Hue,Saturation,Value)
-        cvtColor(img,img,CV_BGR2GRAY);
-        imshow("IR", img);
+        // Convert image from input to threshold method
+        if (inputType == IR) {
+            cvtColor(img, img, CV_BGR2GRAY);
+        } else if (inputType == COLOR) {
+            cvtColor(img, img, CV_BGR2HSV);
+        }
+        Mat input = img.clone();
+        sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
+        putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        imshow("Input", input);
 
         // "Threshold" image to pixels in the ranges
-        threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
+        if (inputType == IR) {
+            threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
+        } else if (inputType == COLOR) {
+            inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
+        }
         imshow("Threshold", img);
 
         // Get rid of remaining noise
@@ -370,8 +390,6 @@ int main()
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         applyText(statusText, Point(5, 90), dst);
         /// Show Images
-        imshow("Raw", img);
-        imshow("HSV", thresh);
         imshow("Final", dst);
         if (mode == IMAGE) {
             char k = waitKey(); // pause
