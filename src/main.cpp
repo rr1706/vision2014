@@ -12,12 +12,49 @@
 /// OpenCV Namespace
 using namespace cv;
 using namespace std;
-const int ESC = 27;
-const int contourMinArea = 500;
+
+// for sprintf (grr)
+char str[255];
+
+// keys
+const char KEY_QUIT = 27;
+const char KEY_SAVE = 's';
+const char KEY_SPEED = ' ';
+
+// config
 const Mode mode = CAMERA;
 const int cameraId = 1;
 const CaptureMode inputType = COLOR;
 const string videoPath = "Y400cmX646cm.avi";
+const bool displayImage = true;
+
+// Values for threshold IR
+const int gray_min = 245;
+const int gray_max = 255;
+
+// Values for threshold RGB
+const int hue_min = 35;
+const int hue_max = 90;
+const int saturation_min = 10;
+const int saturation_max = 255;
+const int value_min = 140;
+const int value_max = 255;
+
+// for approxpolydp
+const int accuracy = 9; //maximum distance between the original curve and its approximation
+const int contourMinArea = 50;
+
+const float calibrationRange = 2.724; // meters
+const float calibrationPixels = 10; // pixels
+
+const int kern_mat[] = {1,0,1,
+                        0,1,0,
+                        1,0,1};
+const Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
+const Size winSize = Size( 5, 5 );
+const Size zeroZone = Size( -1, -1 );
+const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
+
 
 void T2B_L2R(CvPoint* pt)
 {
@@ -78,36 +115,10 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
     }
 }
 
+void targetDetection(Mat img, int id);
+
 int main()
 {
-    // Values for threshold IR
-    const int gray_min = 245;
-    const int gray_max = 255;
-
-    // Values for threshold RGB
-    const int hue_min = 35;
-    const int hue_max = 90;
-    const int saturation_min = 10;
-    const int saturation_max = 255;
-    const int value_min = 140;
-    const int value_max = 255;
-
-    // for approxpolydp
-    const int accuracy = 9; //maximum distance between the original curve and its approximation
-
-    const float calibrationRange = 2.724; // meters
-    const float calibrationPixels = 10; // pixels
-
-    // create a storage for the corners for ration test
-    CvPoint pt[4];
-
-    // Define character to store a string of up to 50 characters, to be printed on the image
-    char str[50];
-
-    // Set the neeed parameters to find the refined corners
-    Size winSize = Size( 5, 5 );
-    Size zeroZone = Size( -1, -1 );
-    TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
     VideoCapture camera;
     if (mode == CAMERA) {
         camera = VideoCapture(cameraId);
@@ -126,15 +137,7 @@ int main()
     }
     int currentSave = 0;
 
-    Mat img, dst, thresh, inframe;
-    // Create Windows
-    namedWindow("Final", CV_WINDOW_NORMAL);
-
-    int kern_mat[] = {1,0,1,
-                      0,1,0,
-                      1,0,1};
-    Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
-
+    Mat img, inframe;
 
     if (mode == IMAGE) {
         inframe = imread("raw_img_0.png");
@@ -158,242 +161,25 @@ int main()
 
         //Break out of loop if esc is pressed
         switch (char key = waitKey(10)) {
-        case ESC:
+        case KEY_QUIT:
             return 0;
             break;
-        case 's':
+        case KEY_SAVE:
             sprintf(str, "raw_img_%d.png", currentSave);
             imwrite(str, img);
             currentSave++;
             break;
-        case ' ':
+        case KEY_SPEED:
             for (int gi = 0; gi < 20; gi++) {
                 camera >> img;
             }
             break;
         }
-
-        // Store the original image img to the Mat dst
-        img.copyTo(dst);
-
-        // Convert image from input to threshold method
-        if (inputType == IR) {
-            cvtColor(img, img, CV_BGR2GRAY);
-        } else if (inputType == COLOR) {
-            cvtColor(img, img, CV_BGR2HSV);
-        }
-        Mat input = img.clone();
-        sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
-        putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        imshow("Input", input);
-
-        // "Threshold" image to pixels in the ranges
-        if (inputType == IR) {
-            threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
-        } else if (inputType == COLOR) {
-            inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
-        }
-        imshow("Threshold", img);
-
-        // Get rid of remaining noise
-        dilate(img, img, kernel);
-        erode(img, img, kernel, Point(-1, -1), 2);
-        imshow("Dilate", img);
-
-
-        // Declare containers for contours and contour heirarchy
-        vector<vector<Point> > contours;
-        vector<Point2f> corners;
-        vector<vector<Point> > Static_Target;
-        vector<vector<Point> > Dynamic_Target;
-        vector<Vec4i> hierarchy;
-
-
-        findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
-
-        // Declare container for approximated polygons
-        vector<vector<Point> > contours_poly( contours.size() );
-        vector<Rect> boundRect( contours.size() );
-
-        double ratio;
-        double lengthTop;
-        double lengthBottom;
-        double lengthRight;
-        double lengthLeft;
-        vector<string> statusText;
-        int totalContours = contours.size();
-        int failedArea = 0;
-        int failedHierarchy = 0;
-        int failedSides = 0;
-        int failedConvex = 0;
-        int failedSquare = 0;
-        int failedVLarge = 0;
-        int success = 0;
-
-        // Create a for loop to go through each contour (i) one at a time
-        for( unsigned int i = 0; i < contours.size(); i++ )
-        {
-            // Very small contours (noise)
-            if (contourArea(contours[i]) < contourMinArea) {
-                failedArea++;
-                continue;
-            }
-            // Contours that have an interior contour
-            if (hierarchy[i][0] <= 0) {
-                failedHierarchy++;
-                continue;
-            }
-            approxPolyDP( contours[i], contours_poly[i], accuracy, true );
-            // Polygon does not have four sides
-            if (contours_poly[i].size() != 4) {
-                failedSides++;
-                continue;
-            }
-            // Non-regular polygons
-            if (!isContourConvex(contours_poly[i])) {
-                failedConvex++;
-                continue;
-            }
-            boundRect[i] = boundingRect(contours_poly[i]);
-            rectangle( dst, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
-
-            // ratio helps determine orientation of rectangle (vertical / horizontal)
-            ratio = static_cast<double>(boundRect[i].width) / static_cast<double>(boundRect[i].height);
-            if (isAlmostSquare(ratio)) {
-                failedSquare++;
-                continue; // go to next contour
-            } else if (isExtraLong(ratio)) {
-                failedVLarge++;
-                continue;
-            }
-
-            vector<Point2f> localCorners;
-            for (int k = 0; k < 4; k++)
-            {
-                pt[k] = contours_poly[i][k];
-            }
-
-
-
-            // organize corners
-            T2B_L2R(pt);
-            for (int k = 0; k < 4; k++)
-            {
-                localCorners.push_back(pt[k]);
-            }
-
-            // Calculate the refined corner locations
-            cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
-            corners.insert(corners.end(), localCorners.begin(), localCorners.end());
-
-            // test aspect ratio
-            lengthTop = distance(pt[0], pt[1]);
-            lengthBottom = distance(pt[2], pt[3]);
-            lengthLeft = distance(pt[0], pt[2]);
-            lengthRight = distance(pt[1], pt[3]);
-            success++;
-            if (ratio < 1) //subject to change
-            {
-                //contour is a tall and skinny one
-                //save off as static target
-                Static_Target.push_back(contours[i]);
-                drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
-                sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
-                statusText.push_back(str);
-                int lengthStaticTop = distance(localCorners[0], localCorners[1]);
-                float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
-                sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
-                statusText.push_back(str);
-                sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
-                statusText.push_back(str);
-            }
-            else
-            {
-                //contour is the short and wide, dynamic target
-                //save off as dynamic target
-                Dynamic_Target.push_back(contours[i]);
-                drawContours(dst, contours_poly,i, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
-            }
-        }
-        cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
-                " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
-
-        /// calculate center
-        vector<Moments> Moment_Center_Static(Static_Target.size() );
-        for( unsigned int i = 0; i < Static_Target.size(); i++ )
-        {
-            Moment_Center_Static[i] = moments( Static_Target[i], false );
-        }
-
-        ///  Get the mass centers:
-        vector<Point2f> Mass_Center_Static( Static_Target.size() );
-        for( unsigned int i = 0; i < Static_Target.size(); i++ )
-        {
-            Mass_Center_Static[i] = Point2f( Moment_Center_Static[i].m10/Moment_Center_Static[i].m00 , Moment_Center_Static[i].m01/Moment_Center_Static[i].m00 );
-        }
-
-        /// calculate center
-        vector<Moments> Moment_Center_Dynamic(Dynamic_Target.size() );
-        for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
-        {
-            Moment_Center_Dynamic[i] = moments( Dynamic_Target[i], false );
-        }
-
-        ///  Get the mass centers:
-        vector<Point2f> Mass_Center_Dynamic( Dynamic_Target.size() );
-        for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
-        {
-            Mass_Center_Dynamic[i] = Point2f( Moment_Center_Dynamic[i].m10/Moment_Center_Dynamic[i].m00 , Moment_Center_Dynamic[i].m01/Moment_Center_Dynamic[i].m00 );
-        }
-        TargetCase targetCase = NONE;
-        if(Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0
-                && Mass_Center_Static[0].x > Mass_Center_Dynamic[0].x)
-        {
-            //case left
-            if (Static_Target.size() + Dynamic_Target.size() == 2) {
-                targetCase = LEFT;
-            }
-        }
-
-        else
-        {
-            //case right
-            if (Static_Target.size() + Dynamic_Target.size() == 2) {
-                targetCase = RIGHT;
-            }
-        }
-        if (Static_Target.size() + Dynamic_Target.size() == 4) {
-            targetCase = ALL;
-        }
-
+        targetDetection(img, 0);
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
-        double seconds = ((double) std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
-        sprintf(str, "FPS %d, per frame: %fs", (int) (1 / seconds), seconds);
-        putText(dst, str,Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        string caseStr;
-        switch (targetCase) {
-        case NONE:
-            caseStr = "None";
-            break;
-        case LEFT:
-            caseStr = "Left";
-            break;
-        case RIGHT:
-            caseStr = "Right";
-            break;
-        case ALL:
-            caseStr = "Both";
-            break;
-        }
-
-        sprintf(str, "Case = %s", caseStr.c_str());
-        putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
-        putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        applyText(statusText, Point(5, 90), dst);
-        /// Show Images
-        imshow("Final", dst);
+        double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
+        cout << "Processed all image code in " << seconds << " seconds." << endl;
         if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
@@ -410,4 +196,227 @@ int main()
     /// Destroy all windows and return 0 to end the program
     destroyAllWindows();
     return 0;
+}
+
+void targetDetection(Mat img, int)
+{
+    // Store the original image img to the Mat dst
+    Mat dst = img.clone();
+
+    // Convert image from input to threshold method
+    if (inputType == IR) {
+        cvtColor(img, img, CV_BGR2GRAY);
+    } else if (inputType == COLOR) {
+        cvtColor(img, img, CV_BGR2HSV);
+    }
+    if (displayImage) {
+        Mat input = dst.clone();
+        sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
+        putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        imshow("Target Input", input);
+    }
+
+    // "Threshold" image to pixels in the ranges
+    if (inputType == IR) {
+        threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
+    } else if (inputType == COLOR) {
+        inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
+    }
+
+    // Get rid of remaining noise
+    dilate(img, img, kernel);
+    erode(img, img, kernel, Point(-1, -1), 2);
+    if (displayImage) {
+        imshow("Target Dialate", img);
+    }
+
+    // Declare containers for contours and contour heirarchy
+    vector<vector<Point> > contours;
+    vector<Point2f> corners;
+    vector<vector<Point> > Static_Target;
+    vector<vector<Point> > Dynamic_Target;
+    vector<Vec4i> hierarchy;
+
+
+    findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
+
+    double ratio;
+    double lengthTop;
+    double lengthBottom;
+    double lengthRight;
+    double lengthLeft;
+    vector<string> statusText;
+    int totalContours = contours.size();
+    int failedArea = 0;
+    int failedHierarchy = 0;
+    int failedSides = 0;
+    int failedConvex = 0;
+    int failedSquare = 0;
+    int failedVLarge = 0;
+    int success = 0;
+
+    // Create a for loop to go through each contour (i) one at a time
+    for( unsigned int i = 0; i < contours.size(); i++ )
+    {
+        vector<Point> contour = contours[i];
+        Vec4i contourHierarchy = hierarchy[i];
+        // Very small contours (noise)
+        if (contourArea(contour) < contourMinArea) {
+            failedArea++;
+            continue;
+        }
+        // Contours that have an interior contour
+        if (contourHierarchy[0] <= 0) {
+            failedHierarchy++;
+            continue;
+        }
+        vector<Point> polygon;
+        approxPolyDP( contour, polygon, accuracy, true );
+        // Polygon does not have four sides
+        if (polygon.size() != 4) {
+            failedSides++;
+            continue;
+        }
+        // Non-regular polygons
+        if (!isContourConvex(polygon)) {
+            failedConvex++;
+            continue;
+        }
+        Rect boundRect = boundingRect(polygon);
+        rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
+
+        // ratio helps determine orientation of rectangle (vertical / horizontal)
+        ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);
+        if (isAlmostSquare(ratio)) {
+            failedSquare++;
+            continue; // go to next contour
+        } else if (isExtraLong(ratio)) {
+            failedVLarge++;
+            continue;
+        }
+        CvPoint pt[4];
+
+        vector<Point2f> localCorners;
+        for (int k = 0; k < 4; k++) {
+            pt[k] = polygon[k];
+        }
+
+
+
+        // organize corners
+        T2B_L2R(pt);
+        for (int k = 0; k < 4; k++) {
+            localCorners.push_back(pt[k]);
+        }
+
+        // Calculate the refined corner locations
+        cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
+        corners.insert(corners.end(), localCorners.begin(), localCorners.end());
+
+        // test aspect ratio
+        lengthTop = distance(pt[0], pt[1]);
+        lengthBottom = distance(pt[2], pt[3]);
+        lengthLeft = distance(pt[0], pt[2]);
+        lengthRight = distance(pt[1], pt[3]);
+        success++;
+        vector<vector<Point>> contoursDrawWrapper {contour};
+        if (ratio < 1) //subject to change
+        {
+            //contour is a tall and skinny one
+            //save off as static target
+            Static_Target.push_back(contour);
+            drawContours(dst, contoursDrawWrapper,0, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
+            sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
+            statusText.push_back(str);
+            int lengthStaticTop = distance(localCorners[0], localCorners[1]);
+            float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
+            sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
+            statusText.push_back(str);
+            sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
+            statusText.push_back(str);
+        }
+        else
+        {
+            //contour is the short and wide, dynamic target
+            //save off as dynamic target
+            Dynamic_Target.push_back(contour);
+            drawContours(dst, contoursDrawWrapper,0, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
+        }
+    }
+    cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
+            " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
+
+    /// calculate center
+    vector<Moments> Moment_Center_Static(Static_Target.size() );
+    for( unsigned int i = 0; i < Static_Target.size(); i++ )
+    {
+        Moment_Center_Static[i] = moments( Static_Target[i], false );
+    }
+
+    ///  Get the mass centers:
+    vector<Point2f> Mass_Center_Static( Static_Target.size() );
+    for( unsigned int i = 0; i < Static_Target.size(); i++ )
+    {
+        Mass_Center_Static[i] = Point2f( Moment_Center_Static[i].m10/Moment_Center_Static[i].m00 , Moment_Center_Static[i].m01/Moment_Center_Static[i].m00 );
+    }
+
+    /// calculate center
+    vector<Moments> Moment_Center_Dynamic(Dynamic_Target.size() );
+    for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
+    {
+        Moment_Center_Dynamic[i] = moments( Dynamic_Target[i], false );
+    }
+
+    ///  Get the mass centers:
+    vector<Point2f> Mass_Center_Dynamic( Dynamic_Target.size() );
+    for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
+    {
+        Mass_Center_Dynamic[i] = Point2f( Moment_Center_Dynamic[i].m10/Moment_Center_Dynamic[i].m00 , Moment_Center_Dynamic[i].m01/Moment_Center_Dynamic[i].m00 );
+    }
+    TargetCase targetCase = NONE;
+    if(Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0
+            && Mass_Center_Static[0].x > Mass_Center_Dynamic[0].x)
+    {
+        //case left
+        if (Static_Target.size() + Dynamic_Target.size() == 2) {
+            targetCase = LEFT;
+        }
+    }
+
+    else
+    {
+        //case right
+        if (Static_Target.size() + Dynamic_Target.size() == 2) {
+            targetCase = RIGHT;
+        }
+    }
+    if (Static_Target.size() + Dynamic_Target.size() == 4) {
+        targetCase = ALL;
+    }
+
+    string caseStr;
+    switch (targetCase) {
+    case NONE:
+        caseStr = "None";
+        break;
+    case LEFT:
+        caseStr = "Left";
+        break;
+    case RIGHT:
+        caseStr = "Right";
+        break;
+    case ALL:
+        caseStr = "Both";
+        break;
+    }
+
+    sprintf(str, "Case = %s", caseStr.c_str());
+    putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+    sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
+    putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+    applyText(statusText, Point(5, 90), dst);
+    /// Show Images
+    if (displayImage) {
+        imshow("Target Detection", dst);
+    }
 }
