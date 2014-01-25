@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <map>
+#include <vector>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "util.hpp"
@@ -26,11 +28,13 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const Mode mode = IMAGE;
+const InputSource mode = CAMERA;
 const int cameraId = 1;
-const CaptureMode inputType = IR;
+const ColorSystem inputType = COLOR;
+const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 const bool displayImage = true;
+const TeamColor color = RED;
 
 // Values for threshold IR
 const int gray_min = 245;
@@ -43,6 +47,16 @@ const int saturation_min = 10;
 const int saturation_max = 255;
 const int value_min = 140;
 const int value_max = 255;
+
+// Values for threshold ball track
+const uchar ballHueMin = color == RED ? 154 : 0;
+const uchar ballHueMax = color == RED ? 189 : 255;
+const uchar ballSatMin = color == RED ? 116 : 0;
+const uchar ballSatMax = color == RED ? 219 : 255;
+const uchar ballValMin = color == RED ? 113 : 0;
+const uchar ballValMax = color == RED ? 255 : 255;
+const int ballSidesMin = 5; // for a circle
+const int ballMinArea = 50;
 
 // for approxpolydp
 const int accuracy = 3; //maximum distance between the original curve and its approximation
@@ -59,6 +73,7 @@ const Size winSize = Size( 5, 5 );
 const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
+map<const string, ContourConstraint> ballTests;
 
 int IMAGE_WIDTH = 0;
 int IMAGE_HEIGHT = 0;
@@ -125,8 +140,18 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
 
 void targetDetection(Mat img, int id);
 
+void ballDetection(Mat img, int id);
+
 int main()
 {
+    ballTests.insert(pair<const string, ContourConstraint>("area", [](vector<Point> contour){
+                         return contourArea(contour) > ballMinArea;
+                     }));
+    ballTests.insert(pair<const string, ContourConstraint>("sides", [](vector<Point> contour){
+                         vector<Point> polygon;
+                         approxPolyDP( contour, polygon, accuracy, true );
+                         return polygon.size() > ballSidesMin;
+                     }));
     VideoCapture camera;
     if (mode == CAMERA) {
         camera = VideoCapture(cameraId);
@@ -154,6 +179,12 @@ int main()
         IMAGE_HEIGHT = inframe.rows;
         IMAGE_WIDTH = inframe.cols;
     }
+    namedWindow("Final", CV_WINDOW_NORMAL);
+    namedWindow("Dilate", CV_WINDOW_NORMAL);
+    moveWindow("Final", 840, 0);
+    resizeWindow("Final", 640, 480);
+    moveWindow("Dilate", 0, 0);
+    resizeWindow("Dilate", 640, 480);
 
     while ( 1 )
     {
@@ -190,7 +221,8 @@ int main()
             waitKey();
             break;
         }
-        targetDetection(img, 0);
+//        targetDetection(img, 0);
+        ballDetection(img, 0);
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
@@ -230,7 +262,7 @@ void targetDetection(Mat img, int)
         Mat input = dst.clone();
         sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
         putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        imshow("Target Input", input);
+        imshow("Input", input);
     }
 
     // "Threshold" image to pixels in the ranges
@@ -245,7 +277,7 @@ void targetDetection(Mat img, int)
     erode(img, img, kernel, Point(-1, -1), 2);
 
     if (displayImage) {
-        imshow("Target Dialate", img);
+        imshow("Dialate", img);
     }
 
     // Declare containers for contours and contour heirarchy
@@ -433,6 +465,62 @@ void targetDetection(Mat img, int)
     line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
     /// Show Images
     if (displayImage) {
-        imshow("Target Detection", dst);
+        imshow("Final", dst);
     }
+}
+
+const double cameraFOV = 117.5; // degrees
+const uint cameraWidth = 640; // pixels
+const uint cameraHeight = 480; // pixels
+const double ballWidth = 24; // inches
+
+Point3d lastBallPosition = {0, 0, 0};
+
+void ballDetection(Mat img, int)
+{
+    assert(inputType == COLOR); // Ball can only be detected on color image
+    Mat dst = img.clone();
+    cvtColor(img, img, CV_BGR2HSV);
+    // Threshold image to
+    inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
+    // Get rid of remaining noise
+    erode(img, img, kernel);
+    dilate(img, img, kernel, Point(-1, -1), 1);
+    if (displayImage) {
+        imshow("Dilate", img);
+    }
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+    findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
+    vector<vector<Point> > succeededContours = getSuccessfulContours(contours, ballTests);
+    for (vector<Point> &contour : succeededContours) {
+        vector<Point> polygon;
+        approxPolyDP( contour, polygon, accuracy, true );
+        Point2f ballCenterFlat;
+        float radius;
+        minEnclosingCircle(contour, ballCenterFlat, radius);
+        circle( dst, ballCenterFlat, (int)radius, Scalar(0, 0, 255), 2, 8, 0 );
+        double diameter = radius * 2.0;
+        double ballAngle = (cameraFOV * diameter) / cameraWidth;
+        double distance = (1.0 / tan((ballAngle / 2.0) * (CV_PI / 180))) * (ballWidth / 2.0);
+        ballCenterFlat.x = (ballCenterFlat.x - cameraWidth / 2);
+        ballCenterFlat.y = -(ballCenterFlat.y - cameraHeight / 2);
+        double ballPosXreal = (ballWidth * ballCenterFlat.x) / diameter;
+        double ballPosYreal = sqrt(square(distance) - square(ballPosXreal));
+        Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distance);
+        Point3d change = lastBallPosition - ballCenter;
+        Point pos = contour[0];
+        sprintf(str, "DA:%.3f BA:%.3f DI:%.3f", diameter, ballAngle, distance);
+        putText(dst, str, pos, CV_FONT_NORMAL, 0.5, Scalar(0, 255, 255));
+        sprintf(str, "Center:%s", xyz(ballCenter).c_str());
+        pos.y += 20;
+        putText(dst, str, pos, CV_FONT_NORMAL, 0.5, Scalar(0, 255, 255));
+        sprintf(str, "Change:%s", xyz(change).c_str());
+        pos.y += 20;
+        putText(dst, str, pos, CV_FONT_NORMAL, 0.5, Scalar(0, 255, 255));
+        lastBallPosition = ballCenter;
+    }
+    line(dst, Point(cameraWidth / 2, 0), Point(cameraWidth / 2, cameraHeight), Scalar(0, 255, 255));
+    line(dst, Point(0, cameraHeight / 2), Point(cameraWidth, cameraHeight / 2), Scalar(0, 255, 255));
+    imshow("Final", dst);
 }
