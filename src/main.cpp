@@ -503,10 +503,10 @@ void ballDetection(Mat img, int)
         double diameter = radius * 2.0;
         double ballAngle = (cameraFOV * diameter) / cameraWidth;
         double distance = (1.0 / tan((ballAngle / 2.0) * (CV_PI / 180))) * (ballWidth / 2.0);
-        ballCenterFlat.x = (ballCenterFlat.x - cameraWidth / 2);
+        ballCenterFlat.x = (ballCenterFlat.x - cameraWidth / 2); // rebase origin to center
         ballCenterFlat.y = -(ballCenterFlat.y - cameraHeight / 2);
         double ballPosXreal = (ballWidth * ballCenterFlat.x) / diameter;
-        double ballPosYreal = sqrt(square(distance) - square(ballPosXreal));
+        double ballPosYreal = (ballWidth * ballCenterFlat.y) / diameter;//sqrt(square(distance) - square(ballPosXreal));
         Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distance);
         Point3d change = lastBallPosition - ballCenter;
         Point pos = contour[0];
