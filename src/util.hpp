@@ -53,7 +53,7 @@ bool isAlmostSquare ( const double ratio )
 
 bool isExtraLong(const double ratio)
 {
-    return ratio > 10 || ratio < 0.1;
+    return ratio > 20 || ratio < 0.01;
 }
 
 #endif // UTIL_HPP
