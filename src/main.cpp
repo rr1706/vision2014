@@ -26,7 +26,7 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const Mode mode = CAMERA;
+const Mode mode = IMAGE;
 const int cameraId = 1;
 const CaptureMode inputType = IR;
 const string videoPath = "Y400cmX646cm.avi";
@@ -151,22 +151,12 @@ int main()
 
     if (mode == IMAGE) {
         inframe = imread("raw_img_0.png");
+        IMAGE_HEIGHT = inframe.rows;
+        IMAGE_WIDTH = inframe.cols;
     }
 
     while ( 1 )
     {
-        //reset variables
-        int Plane_Distance = 0;
-        int Image_Heigh_in = 0;
-        int Real_Distance = 0;
-        int In_Screen_Angle = 0;
-        int failedArea = 0;
-        int failedHierarchy = 0;
-        int failedSides = 0;
-        int failedConvex = 0;
-        int failedSquare = 0;
-        int failedVLarge = 0;
-        int success = 0;
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -211,6 +201,8 @@ int main()
                 stringstream filename;
                 filename << "raw_img_" << k << ".png";
                 inframe = imread(filename.str());
+                IMAGE_HEIGHT = inframe.rows;
+                IMAGE_WIDTH = inframe.cols;
                 continue;
             } else {
                 break;
