@@ -9,11 +9,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include "util.hpp"
 
-#define FOV_Y 80//degrees
-#define FOV_X 117.5 //degrees
-#define IMAGE_HEIGHT 480
-#define IMAGE_WIDTH 640
-#define STATIC_TARGET_HEIGHT  32 //in
+#define FOV_Y 79//degrees
+#define FOV_X 111.426 //degrees
+#define STATIC_TARGET_HEIGHT  32.25 //in
 
 // OpenCV Namespace
 using namespace cv;
@@ -22,12 +20,16 @@ using namespace std;
 //constants
 const int ESC = 27;
 const int contourMinArea = 50;
-const Mode mode = IMAGE;
+const Mode mode = CAMERA;
 const int cameraId = 1;
 const CaptureMode inputType = IR;
 const string videoPath = "Y400cmX646cm.avi";
 
-void T2B_L2R(CvPoint* pt)
+int IMAGE_WIDTH = 0;
+int IMAGE_HEIGHT = 0;
+
+template<class ArrayOfPoints>
+void T2B_L2R(ArrayOfPoints pt)
 {
     int temp_x;
     int temp_y;
@@ -99,13 +101,12 @@ int main()
     const int hue_max = 250;
     const int saturation_max = 155;
     const int value_max = 255;
-    float FOV_X_Divided_Image_Width = FOV_X / IMAGE_WIDTH;
-    float Tan_FOV_Y_Half = 0.8390;
-    const float FOV_Y_DIV_HEIGHT = FOV_Y / IMAGE_HEIGHT;
+    float Tan_FOV_Y_Half = 1.46;
     float Image_Heigh_in;
     float Plane_Distance;
     float Real_Distance;
 
+    float In_Screen_Angle;
     int kern_mat[] = {1,0,1,
                       0,1,0,
                       1,0,1};
@@ -113,7 +114,7 @@ int main()
     Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
 
     // for approxpolydp
-    const int accuracy = 9; //maximum distance between the original curve and its approximation
+    const int accuracy = 3; //maximum distance between the original curve and its approximation
 
     const float calibrationRange = 2.724; // meters
     const float calibrationPixels = 10; // pixels
@@ -145,6 +146,8 @@ int main()
             return -1;
         }
     }
+    IMAGE_HEIGHT =  camera.get(CV_CAP_PROP_FRAME_HEIGHT);
+    IMAGE_WIDTH = camera.get(CV_CAP_PROP_FRAME_WIDTH);
     int currentSave = 0;
 
     // Create Mat to store images
@@ -163,6 +166,7 @@ int main()
         Plane_Distance = 0;
         Image_Heigh_in = 0;
         Real_Distance = 0;
+        In_Screen_Angle = 0;
         int failedArea = 0;
         int failedHierarchy = 0;
         int failedSides = 0;
@@ -198,6 +202,9 @@ int main()
             for (int gi = 0; gi < 20; gi++) {
                 camera >> img;
             }
+            break;
+        case 'p':
+            waitKey();
             break;
         }
 
@@ -297,20 +304,15 @@ int main()
             vector<Point2f> localCorners;
             for (int k = 0; k < 4; k++)
             {
-                pt[k] = contours_poly[i][k];
+                localCorners.push_back(contours_poly[i][k]);
             }
 
             // organize corners
-            T2B_L2R(pt);
-
-            //populate localCorners with pt
-            for (int k = 0; k < 4; k++)
-            {
-                localCorners.push_back(pt[k]);
-            }
+            T2B_L2R(localCorners);
 
             // Calculate the refined corner locations
             cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
+            T2B_L2R(localCorners);
             corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
             // test aspect ratio
@@ -321,43 +323,35 @@ int main()
             success++;
             int centerX = boundRect[i].x + boundRect[i].width / 2;
             int centerY = boundRect[i].y + boundRect[i].height / 2;
+            Point2i center = {centerX, centerY};
 
-            if (boundRect[i].height > boundRect[i].width)
+            if (boundRect[i].height > boundRect[i].width * 2) // static target
             {
-                double Center_Static_X = -((IMAGE_WIDTH/2) - ( boundRect[i].x + (boundRect[i].width / 2))) ;
-//                double Center_Static_Y = -((boundRect[i].y + boundRect[i].width) - (IMAGE_HEIGHT/2));
-                double Center_Static_Y = -(centerY - (IMAGE_HEIGHT/2));
+                double refinedHeight = distance(localCorners[0], localCorners[2]);
+                double flatHeight = localCorners[2].y - localCorners[0].y;
+                double Center_Static_X = (boundRect[i].x + (boundRect[i].width / 2)) - (IMAGE_WIDTH/2);
                 Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect[i].height;
-                Plane_Distance = (Image_Heigh_in * 0.5) / Tan_FOV_Y_Half;
-                double In_Screen_Angle_X = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
-                double In_Screen_Angle_Y = (FOV_Y / IMAGE_HEIGHT) * Center_Static_Y;
-                double Real_Distance_X = Plane_Distance / (cos(In_Screen_Angle_X * CV_PI / 180));
-                Point isa(In_Screen_Angle_X, In_Screen_Angle_Y);
-                Real_Distance = Real_Distance_X / (cos(In_Screen_Angle_Y * CV_PI / 180));
-//                Real_Distance = sqrt(square(Real_Distance_X) + 256);
+                Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
+                double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+                double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+
                 assert(Real_Distance >= 0);
 
-                sprintf(str, "IHi:%f PD:%f ISA:%s RD:%f", Image_Heigh_in, Plane_Distance, xyz(isa).c_str(), Real_Distance);
-                statusText.push_back(str);
-            }
-
-            if (ratio < 1) //subject to change
-            {
+                sprintf(str, "BRH:%d", boundRect[i].height);
+                putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+                sprintf(str, "RFH:%.2f", refinedHeight);
+                putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+                sprintf(str, "PLH:%.2f", flatHeight);
+                putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+                sprintf(str, "PLD:%.2f", Plane_Distance);
+                putText(dst, str, center + Point2i(0, 45), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+                sprintf(str, "RLD:%.2f", Real_Distance);
+                putText(dst, str, center + Point2i(0, 60), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+                circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
+                circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
                 //contour is a tall and skinny one
                 //save off as static target
                 Static_Target.push_back(contours[i]);
-                drawContours(dst, contours_poly,i, Scalar(0,0,255), 3, 8, hierarchy, 0, Point() );
-                sprintf(str, "LC0:%s LC1:%s", xyz(localCorners[0]).c_str(), xyz(localCorners[1]).c_str());
-                statusText.push_back(str);
-                int lengthStaticTop = distance(localCorners[0], localCorners[1]);
-                float distanceToTarget = (calibrationRange / lengthStaticTop) * calibrationPixels;
-                sprintf(str, "R:%f L:%dpx D:%fm", ratio, lengthStaticTop, distanceToTarget);
-                statusText.push_back(str);
-//                sprintf(str, "H:%f L:%f", distance(localCorners[0], localCorners[2]), distance(localCorners[0], localCorners[1]));
-                sprintf(str, "H:%d L:%d", boundRect[i].height, boundRect[i].width);
-                statusText.push_back(str);
-                sprintf(str, "BRCX:%d BRCY:%d", boundRect[i].x + boundRect[i].width, boundRect[i].y + boundRect[i].height);
-                statusText.push_back(str);
             }
             else
             {
@@ -443,6 +437,8 @@ int main()
         putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
         putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
+        putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         applyText(statusText, Point(5, 90), dst);
 
         //draw crosshairs
