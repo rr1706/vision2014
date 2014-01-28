@@ -348,14 +348,10 @@ void targetDetection(Mat img, int)
 
             sprintf(str, "BRH:%d", boundRect.height);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RFH:%.2f", refinedHeight);
+            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance));
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLH:%.2f", flatHeight);
+            sprintf(str, "RLD:%.2fm", inchesToMeters(Real_Distance));
             putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2f", Plane_Distance);
-            putText(dst, str, center + Point2i(0, 45), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2f", Real_Distance);
-            putText(dst, str, center + Point2i(0, 60), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
             circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
             circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
             //contour is a tall and skinny one

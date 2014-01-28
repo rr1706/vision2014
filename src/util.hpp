@@ -56,4 +56,9 @@ bool isExtraLong(const double ratio)
     return ratio > 20 || ratio < 0.01;
 }
 
+double inchesToMeters(const double inches)
+{
+    return inches * 0.0254;
+}
+
 #endif // UTIL_HPP
