@@ -61,7 +61,8 @@ std::string xy(const cv::Point2d p1)
 
 std::string xyz(const cv::Point3d p1)
 {
-    std::stringstream ret;
+    std::ostringstream ret;
+    ret.precision(5);
     ret << "x=" << p1.x << ",y=" << p1.y << ",z=" << p1.z;
     return ret.str();
 }
