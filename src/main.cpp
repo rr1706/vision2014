@@ -9,6 +9,7 @@
 #include <vector>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <QtNetwork>
 #include "util.hpp"
 
 #define FOV_Y 79//degrees
@@ -28,13 +29,16 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const InputSource mode = IMAGE;
+const InputSource mode = CAMERA;
 const int cameraId = 1;
 const ColorSystem inputType = COLOR;
 const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 const bool displayImage = true;
 const TeamColor color = RED;
+const bool doUdp = true;
+const QHostAddress udpRecipient(0xF00BA4);
+QUdpSocket udpSocket;
 
 // Values for threshold IR
 const int gray_min = 245;
@@ -49,11 +53,13 @@ const int value_min = 140;
 const int value_max = 255;
 
 // Values for threshold ball track
-const uchar ballHueMin = color == RED ? 154 : 31;
-const uchar ballHueMax = color == RED ? 189 : 128;
+const uchar ballHueMin = color == RED ? 115 : 31;
+const uchar ballHueMax = color == RED ? 150 : 128;
+//const uchar ballHueMinUpper = color == RED ? 150 : 31;
+//const uchar ballHueMaxUpper = color == RED ? 255 : 128;
 const uchar ballSatMin = color == RED ? 116 : 92;
-const uchar ballSatMax = color == RED ? 219 : 202;
-const uchar ballValMin = color == RED ? 50 : 0;
+const uchar ballSatMax = color == RED ? 255 : 202;
+const uchar ballValMin = color == RED ? 100 : 0;
 const uchar ballValMax = color == RED ? 255 : 158;
 const int ballSidesMin = 5; // for a circle
 const int ballMinArea = 50;
@@ -488,6 +494,7 @@ void ballDetection(Mat img, int)
     auto timeNow = std::chrono::high_resolution_clock::now();
     double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;
     Mat dst = img.clone();
+    cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
     // Threshold image to
     inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
@@ -514,6 +521,10 @@ void ballDetection(Mat img, int)
     if (largestContour[0].size() == 0) {
         largestContour.pop_back();
     }
+    double angleToBall = 0;
+    double ballVelocity = 0;
+    double distanceToBall = 0;
+    double ballHeading = 0;
     for (vector<Point> &contour : largestContour) {
         vector<Point> polygon;
         approxPolyDP( contour, polygon, accuracy, true );
@@ -523,19 +534,20 @@ void ballDetection(Mat img, int)
         circle( dst, ballCenterFlat, (int)radius, Scalar(0, 0, 255), 2, 8, 0 );
         double diameter = radius * 2.0;
         double ballAngle = (cameraFOV * diameter) / IMAGE_WIDTH;
-        double distance = (1.0 / tan((ballAngle / 2.0) * (CV_PI / 180))) * (ballWidth / 2.0);
+        distanceToBall = (1.0 / tan((ballAngle / 2.0) * (CV_PI / 180))) * (ballWidth / 2.0);
         line(dst, Point(ballCenterFlat.x, 0), Point(ballCenterFlat.x, IMAGE_HEIGHT), Scalar(0, 255, 50));
         line(dst, Point(0, ballCenterFlat.y), Point(IMAGE_WIDTH, ballCenterFlat.y), Scalar(0, 255, 50));
         ballCenterFlat.x = (ballCenterFlat.x - IMAGE_WIDTH / 2); // rebase origin to center
         ballCenterFlat.y = -(ballCenterFlat.y - IMAGE_HEIGHT / 2);
         double ballPosXreal = (ballWidth * ballCenterFlat.x) / diameter;
-        float ballPosYreal = sqrt(square(distance) - square(ballPosXreal));
-        Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distance);
+        double ballPosYreal = sqrt(square(distanceToBall) - square(ballPosXreal));
+        Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distanceToBall);
         Point2d centerXY = Point2d(ballPosXreal, ballPosYreal);
-        double angleToBall = acos(centerXY.y / distance) * (180 / CV_PI);
+        angleToBall = acos(centerXY.y / distanceToBall) * (180 / CV_PI);
         Point2d change = lastBallPosition - centerXY;
         double movedDistance = sqrt(square(change.x) + square(change.y)); // real, meters
-        double ballVelocity = movedDistance / timeSinceLastFrame; // meters per second
+        ballVelocity = movedDistance / timeSinceLastFrame; // meters per second
+        ballHeading = acos(change.x / movedDistance) * (180 / CV_PI);
         Point pos = contour[0];
         sprintf(str, "Dia:%.2fpx", diameter);
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
@@ -543,7 +555,7 @@ void ballDetection(Mat img, int)
         sprintf(str, "BallAng:%.2fo", ballAngle);
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
         pos.y += 10;
-        sprintf(str, "Dist:%.2fm", distance);
+        sprintf(str, "Dist:%.2fm", distanceToBall);
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
         // Notes on position ball
         // The plane on which XY resides is a top-view basically
@@ -556,13 +568,26 @@ void ballDetection(Mat img, int)
         sprintf(str, "Change:%s", xy(change).c_str());
         pos.y += 10;
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-        sprintf(str, "Moved:%.2fm Angle:%.2f Speed:%.2fm/s", movedDistance, angleToBall, ballVelocity);
+        sprintf(str, "Moved:%.2fm Angle:%.2f Velocity:%.2fm/s", movedDistance, angleToBall, ballVelocity);
+        pos.y += 10;
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        sprintf(str, "Heading:%.2f", ballHeading);
         pos.y += 10;
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
         lastBallPosition = centerXY;
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
-    imshow("Final", dst);
+    if (displayImage) {
+        imshow("Final", dst);
+    }
+    if (doUdp) {
+        QByteArray datagram = "balltrack "
+                + QByteArray::number(distanceToBall) + " "
+                + QByteArray::number(angleToBall) + " "
+                + QByteArray::number(ballVelocity);
+
+        udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress(0x0A110602), 80);
+    }
     lastFrameStart = timeNow;
 }
