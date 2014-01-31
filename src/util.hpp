@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <deque>
 
 enum InputSource {
     CAMERA = 0,
@@ -128,6 +129,12 @@ std::vector<std::vector<cv::Point> > getSuccessfulContours(
     }
     std::cout << "success:" << succeededContours.size() << std::endl;
     return succeededContours;
+}
+
+template<class List>
+cv::Point2d getMedianPoint(List &items, int start, int end)
+{
+    items.push_back(start);
 }
 
 #endif // UTIL_HPP

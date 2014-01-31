@@ -7,6 +7,7 @@
 #include <chrono>
 #include <map>
 #include <vector>
+#include <deque>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <QtNetwork>
@@ -31,7 +32,7 @@ const char KEY_SPEED = ' ';
 
 // config
 const InputSource mode = CAMERA;
-const int cameraId = 1;
+const int cameraId = 0;
 const ColorSystem inputType = COLOR;
 const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
@@ -40,6 +41,8 @@ const TeamColor color = RED;
 const bool doUdp = true;
 const QHostAddress udpRecipient(0xF00BA4);
 QUdpSocket udpSocket;
+const bool saveImages = true;
+const double imageInterval = 5.0; // seconds
 
 // Values for threshold IR
 const int gray_min = 245;
@@ -487,8 +490,9 @@ const double cameraFOV = 117.5; // degrees
 const double ballWidth = 0.6096; // meters
 
 Point2d lastBallPosition = {0, 0};
+deque<Point2d> lastBallPositions;
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
-SolutionLog ballPositions("balltrack.csv", {"frame", "time"});
+SolutionLog ballPositions("balltrack.csv", {"frame", "time", "pos_px_x", "pos_px_y", "distance", "rotation"});
 int ballFrameCount = 0;
 auto startTime = std::chrono::high_resolution_clock::now();
 void ballDetection(Mat img, int)
@@ -577,6 +581,15 @@ void ballDetection(Mat img, int)
         pos.y += 10;
         putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
         lastBallPosition = centerXY;
+        if (lastBallPositions.size() > 10) {
+            lastBallPositions.pop_front();
+        }
+        lastBallPositions.push_back(centerXY);
+        // store five points here
+        // calculate median of first five for first point
+        // calculate median of last five for second point
+        ballPositions.log("pos_px_x", ballCenterFlat.x).log("pos_px_y", ballCenterFlat.y);
+        ballPositions.log("distance", distanceToBall).log("rotation", ballHeading);
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
@@ -592,7 +605,7 @@ void ballDetection(Mat img, int)
         udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress(0x0A110602), 80);
     }
     if (ballPositions.isOpen()) {
-        double timeSinceStart = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-startTime).count()) / 1000000000.0;
+        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
         ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).flush();
     } else {
         cerr << "Unable to write solutions log" << endl;
