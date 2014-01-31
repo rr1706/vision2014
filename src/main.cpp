@@ -189,12 +189,14 @@ int main()
         IMAGE_HEIGHT = inframe.rows;
         IMAGE_WIDTH = inframe.cols;
     }
-    namedWindow("Final", CV_WINDOW_NORMAL);
-    namedWindow("Dilate", CV_WINDOW_NORMAL);
-    moveWindow("Final", 840, 0);
-    resizeWindow("Final", 640, 480);
-    moveWindow("Dilate", 0, 0);
-    resizeWindow("Dilate", 640, 480);
+    if (displayImage) {
+        namedWindow("Final", CV_WINDOW_NORMAL);
+        namedWindow("Dilate", CV_WINDOW_NORMAL);
+        moveWindow("Final", 840, 0);
+        resizeWindow("Final", 640, 480);
+        moveWindow("Dilate", 0, 0);
+        resizeWindow("Dilate", 640, 480);
+    }
 
     while ( 1 )
     {
@@ -495,6 +497,7 @@ auto lastFrameStart = std::chrono::high_resolution_clock::now();
 SolutionLog ballPositions("balltrack.csv", {"frame", "time", "pos_px_x", "pos_px_y", "distance", "rotation"});
 int ballFrameCount = 0;
 auto startTime = std::chrono::high_resolution_clock::now();
+int hueSliMin = ballHueMin, hueSliMax = ballHueMax, satSliMin = ballSatMin, satSliMax = ballSatMax, valSliMin = ballValMin, valSliMax = ballValMax;
 void ballDetection(Mat img, int)
 {
     assert(inputType == COLOR); // Ball can only be detected on color image
@@ -503,8 +506,16 @@ void ballDetection(Mat img, int)
     Mat dst = img.clone();
     cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
+    if (displayImage) {
+        createTrackbar("Hue_min", "Dilate", &hueSliMin, 255, 0);
+        createTrackbar("Hue_max", "Dilate", &hueSliMax, 255, 0);
+        createTrackbar("Sat_min", "Dilate", &satSliMin, 255, 0);
+        createTrackbar("Sat_max", "Dilate", &satSliMax, 255, 0);
+        createTrackbar("Val_min", "Dilate", &valSliMin, 255, 0);
+        createTrackbar("Val_max", "Dilate", &valSliMax, 255, 0);
+    }
     // Threshold image to
-    inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
+    inRange(img, Scalar(hueSliMin, satSliMin, valSliMin), Scalar(hueSliMax, satSliMax, valSliMax), img);
     // Get rid of remaining noise
     morphologyEx(img, img, MORPH_OPEN, kernel);
     if (displayImage) {
