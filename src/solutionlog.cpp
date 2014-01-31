@@ -3,11 +3,11 @@
 #include <cassert>
 #include <iostream>
 
-SolutionLog::SolutionLog()
+SolutionLog::SolutionLog() : writes(0)
 {
 }
 
-SolutionLog::SolutionLog(std::string file, std::vector<std::string> columns)
+SolutionLog::SolutionLog(std::string file, std::vector<std::string> columns) : writes(0)
 {
     this->open(file, columns);
 }

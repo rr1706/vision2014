@@ -20,7 +20,7 @@ private:
     std::ofstream file;
     std::vector<std::string> columns;
     std::map<std::string, double> data;
-    int writes = 0;
+    int writes;
 };
 
 #endif // SOLUTIONLOG_HPP
