@@ -11,6 +11,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <QtNetwork>
 #include "util.hpp"
+#include "solutionlog.hpp"
 
 #define FOV_Y 79//degrees
 #define FOV_X 111.426 //degrees
@@ -487,7 +488,9 @@ const double ballWidth = 0.6096; // meters
 
 Point2d lastBallPosition = {0, 0};
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
-
+SolutionLog ballPositions("balltrack.csv", {"frame", "time"});
+int ballFrameCount = 0;
+auto startTime = std::chrono::high_resolution_clock::now();
 void ballDetection(Mat img, int)
 {
     assert(inputType == COLOR); // Ball can only be detected on color image
@@ -499,8 +502,7 @@ void ballDetection(Mat img, int)
     // Threshold image to
     inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
     // Get rid of remaining noise
-    erode(img, img, kernel);
-    dilate(img, img, kernel, Point(-1, -1), 1);
+    morphologyEx(img, img, MORPH_OPEN, kernel);
     if (displayImage) {
         imshow("Dilate", img);
     }
@@ -589,5 +591,12 @@ void ballDetection(Mat img, int)
 
         udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress(0x0A110602), 80);
     }
+    if (ballPositions.isOpen()) {
+        double timeSinceStart = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-startTime).count()) / 1000000000.0;
+        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).flush();
+    } else {
+        cerr << "Unable to write solutions log" << endl;
+    }
     lastFrameStart = timeNow;
+    ballFrameCount++;
 }
