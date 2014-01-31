@@ -5,9 +5,14 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <map>
+#include <vector>
+#include <deque>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <QtNetwork>
 #include "util.hpp"
+#include "solutionlog.hpp"
 
 #define FOV_Y 79//degrees
 #define FOV_X 111.426 //degrees
@@ -26,11 +31,18 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const Mode mode = IMAGE;
-const int cameraId = 1;
-const CaptureMode inputType = IR;
+const InputSource mode = CAMERA;
+const int cameraId = 0;
+const ColorSystem inputType = COLOR;
+const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 const bool displayImage = true;
+const TeamColor color = RED;
+const bool doUdp = true;
+const QHostAddress udpRecipient(0xF00BA4);
+QUdpSocket udpSocket;
+const bool saveImages = true;
+const double imageInterval = 5.0; // seconds
 
 // Values for threshold IR
 const int gray_min = 245;
@@ -43,6 +55,18 @@ const int saturation_min = 10;
 const int saturation_max = 255;
 const int value_min = 140;
 const int value_max = 255;
+
+// Values for threshold ball track
+const uchar ballHueMin = color == RED ? 115 : 31;
+const uchar ballHueMax = color == RED ? 150 : 128;
+//const uchar ballHueMinUpper = color == RED ? 150 : 31;
+//const uchar ballHueMaxUpper = color == RED ? 255 : 128;
+const uchar ballSatMin = color == RED ? 116 : 92;
+const uchar ballSatMax = color == RED ? 255 : 202;
+const uchar ballValMin = color == RED ? 100 : 0;
+const uchar ballValMax = color == RED ? 255 : 158;
+const int ballSidesMin = 5; // for a circle
+const int ballMinArea = 50;
 
 // for approxpolydp
 const int accuracy = 3; //maximum distance between the original curve and its approximation
@@ -59,6 +83,7 @@ const Size winSize = Size( 5, 5 );
 const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
+map<const string, ContourConstraint> ballTests;
 
 int IMAGE_WIDTH = 0;
 int IMAGE_HEIGHT = 0;
@@ -125,8 +150,18 @@ void applyText(vector<string> &text, Point startPos, Mat &img)
 
 void targetDetection(Mat img, int id);
 
+void ballDetection(Mat img, int id);
+
 int main()
 {
+    ballTests.insert(pair<const string, ContourConstraint>("area", [](vector<Point> contour){
+                         return contourArea(contour) > ballMinArea;
+                     }));
+    ballTests.insert(pair<const string, ContourConstraint>("sides", [](vector<Point> contour){
+                         vector<Point> polygon;
+                         approxPolyDP( contour, polygon, accuracy, true );
+                         return polygon.size() >= ballSidesMin;
+                     }));
     VideoCapture camera;
     if (mode == CAMERA) {
         camera = VideoCapture(cameraId);
@@ -154,6 +189,12 @@ int main()
         IMAGE_HEIGHT = inframe.rows;
         IMAGE_WIDTH = inframe.cols;
     }
+    namedWindow("Final", CV_WINDOW_NORMAL);
+    namedWindow("Dilate", CV_WINDOW_NORMAL);
+    moveWindow("Final", 840, 0);
+    resizeWindow("Final", 640, 480);
+    moveWindow("Dilate", 0, 0);
+    resizeWindow("Dilate", 640, 480);
 
     while ( 1 )
     {
@@ -190,7 +231,15 @@ int main()
             waitKey();
             break;
         }
-        targetDetection(img, 0);
+        switch (tracking) {
+        case BALL:
+            ballDetection(img, 0);
+            break;
+        case TARGET:
+            targetDetection(img, 0);
+            break;
+        }
+
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
@@ -230,7 +279,7 @@ void targetDetection(Mat img, int)
         Mat input = dst.clone();
         sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
         putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        imshow("Target Input", input);
+        imshow("Input", input);
     }
 
     // "Threshold" image to pixels in the ranges
@@ -245,7 +294,7 @@ void targetDetection(Mat img, int)
     erode(img, img, kernel, Point(-1, -1), 2);
 
     if (displayImage) {
-        imshow("Target Dialate", img);
+        imshow("Dialate", img);
     }
 
     // Declare containers for contours and contour heirarchy
@@ -433,6 +482,134 @@ void targetDetection(Mat img, int)
     line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
     /// Show Images
     if (displayImage) {
-        imshow("Target Detection", dst);
+        imshow("Final", dst);
     }
+}
+
+const double cameraFOV = 117.5; // degrees
+const double ballWidth = 0.6096; // meters
+
+Point2d lastBallPosition = {0, 0};
+deque<Point2d> lastBallPositions;
+auto lastFrameStart = std::chrono::high_resolution_clock::now();
+SolutionLog ballPositions("balltrack.csv", {"frame", "time", "pos_px_x", "pos_px_y", "distance", "rotation"});
+int ballFrameCount = 0;
+auto startTime = std::chrono::high_resolution_clock::now();
+void ballDetection(Mat img, int)
+{
+    assert(inputType == COLOR); // Ball can only be detected on color image
+    auto timeNow = std::chrono::high_resolution_clock::now();
+    double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;
+    Mat dst = img.clone();
+    cvtColor(img,img, CV_BGR2RGB);
+    cvtColor(img, img, CV_BGR2HSV);
+    // Threshold image to
+    inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
+    // Get rid of remaining noise
+    morphologyEx(img, img, MORPH_OPEN, kernel);
+    if (displayImage) {
+        imshow("Dilate", img);
+    }
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+    findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
+    vector<vector<Point> > succeededContours = getSuccessfulContours(contours, ballTests);
+    vector<vector<Point> > largestContour(static_cast<unsigned int>(1));
+    for (vector<Point> &contour : succeededContours) {
+        if (largestContour.size() > 0 && largestContour[0].size() > 0) {
+            if (contourArea(contour) > contourArea(largestContour[0])) {
+                largestContour[0] = contour;
+            }
+        } else {
+            largestContour[0] = contour;
+        }
+    }
+    if (largestContour[0].size() == 0) {
+        largestContour.pop_back();
+    }
+    double angleToBall = 0;
+    double ballVelocity = 0;
+    double distanceToBall = 0;
+    double ballHeading = 0;
+    for (vector<Point> &contour : largestContour) {
+        vector<Point> polygon;
+        approxPolyDP( contour, polygon, accuracy, true );
+        Point2f ballCenterFlat;
+        float radius;
+        minEnclosingCircle(contour, ballCenterFlat, radius);
+        circle( dst, ballCenterFlat, (int)radius, Scalar(0, 0, 255), 2, 8, 0 );
+        double diameter = radius * 2.0;
+        double ballAngle = (cameraFOV * diameter) / IMAGE_WIDTH;
+        distanceToBall = (1.0 / tan((ballAngle / 2.0) * (CV_PI / 180))) * (ballWidth / 2.0);
+        line(dst, Point(ballCenterFlat.x, 0), Point(ballCenterFlat.x, IMAGE_HEIGHT), Scalar(0, 255, 50));
+        line(dst, Point(0, ballCenterFlat.y), Point(IMAGE_WIDTH, ballCenterFlat.y), Scalar(0, 255, 50));
+        ballCenterFlat.x = (ballCenterFlat.x - IMAGE_WIDTH / 2); // rebase origin to center
+        ballCenterFlat.y = -(ballCenterFlat.y - IMAGE_HEIGHT / 2);
+        double ballPosXreal = (ballWidth * ballCenterFlat.x) / diameter;
+        double ballPosYreal = sqrt(square(distanceToBall) - square(ballPosXreal));
+        Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distanceToBall);
+        Point2d centerXY = Point2d(ballPosXreal, ballPosYreal);
+        angleToBall = acos(centerXY.y / distanceToBall) * (180 / CV_PI);
+        Point2d change = lastBallPosition - centerXY;
+        double movedDistance = sqrt(square(change.x) + square(change.y)); // real, meters
+        ballVelocity = movedDistance / timeSinceLastFrame; // meters per second
+        ballHeading = acos(change.x / movedDistance) * (180 / CV_PI);
+        Point pos = contour[0];
+        sprintf(str, "Dia:%.2fpx", diameter);
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        pos.y += 10;
+        sprintf(str, "BallAng:%.2fo", ballAngle);
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        pos.y += 10;
+        sprintf(str, "Dist:%.2fm", distanceToBall);
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        // Notes on position ball
+        // The plane on which XY resides is a top-view basically
+        // X is the distance over from the center of the camera
+        // Y is the distance from the camera to the ball
+        // See connor's engineering notebook for more, page 23
+        sprintf(str, "Center:%s", xyz(ballCenter).c_str());
+        pos.y += 10;
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        sprintf(str, "Change:%s", xy(change).c_str());
+        pos.y += 10;
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        sprintf(str, "Moved:%.2fm Angle:%.2f Velocity:%.2fm/s", movedDistance, angleToBall, ballVelocity);
+        pos.y += 10;
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        sprintf(str, "Heading:%.2f", ballHeading);
+        pos.y += 10;
+        putText(dst, str, pos, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+        lastBallPosition = centerXY;
+        if (lastBallPositions.size() > 10) {
+            lastBallPositions.pop_front();
+        }
+        lastBallPositions.push_back(centerXY);
+        // store five points here
+        // calculate median of first five for first point
+        // calculate median of last five for second point
+        ballPositions.log("pos_px_x", ballCenterFlat.x).log("pos_px_y", ballCenterFlat.y);
+        ballPositions.log("distance", distanceToBall).log("rotation", ballHeading);
+    }
+    line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
+    line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
+    if (displayImage) {
+        imshow("Final", dst);
+    }
+    if (doUdp) {
+        QByteArray datagram = "balltrack "
+                + QByteArray::number(distanceToBall) + " "
+                + QByteArray::number(angleToBall) + " "
+                + QByteArray::number(ballVelocity);
+
+        udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress(0x0A110602), 80);
+    }
+    if (ballPositions.isOpen()) {
+        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
+        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).flush();
+    } else {
+        cerr << "Unable to write solutions log" << endl;
+    }
+    lastFrameStart = timeNow;
+    ballFrameCount++;
 }
