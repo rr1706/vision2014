@@ -5,12 +5,16 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <iomanip>
+#include <ctime>
 #include <map>
 #include <vector>
 #include <deque>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <QtNetwork>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "util.hpp"
 #include "solutionlog.hpp"
 
@@ -39,10 +43,10 @@ const string videoPath = "Y400cmX646cm.avi";
 const bool displayImage = true;
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(0xF00BA4);
+const QHostAddress udpRecipient(0xC049EE66);
 QUdpSocket udpSocket;
 const bool saveImages = true;
-const double imageInterval = 5.0; // seconds
+const double imageInterval = 1.0; // seconds
 
 // Values for threshold IR
 const int gray_min = 245;
@@ -84,9 +88,16 @@ const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
 map<const string, ContourConstraint> ballTests;
+auto startTime = std::chrono::high_resolution_clock::now();
+auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
 int IMAGE_WIDTH = 0;
 int IMAGE_HEIGHT = 0;
+int imageWriteIndex = 0;
+
+char dirname[255];
+time_t rawtime;
+struct tm* timeinfo;
 
 template<class ArrayOfPoints>
 void T2B_L2R(ArrayOfPoints pt)
@@ -154,6 +165,10 @@ void ballDetection(Mat img, int id);
 
 int main()
 {
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(dirname,50,"%Y%m%d_%H%M%S",timeinfo);
+
     ballTests.insert(pair<const string, ContourConstraint>("area", [](vector<Point> contour){
                          return contourArea(contour) > ballMinArea;
                      }));
@@ -197,6 +212,9 @@ int main()
         moveWindow("Dilate", 0, 0);
         resizeWindow("Dilate", 640, 480);
     }
+    if (mkdir(dirname, 0755) == -1) {
+        strcpy(dirname, ".");
+    }
 
     while ( 1 )
     {
@@ -233,6 +251,13 @@ int main()
             waitKey();
             break;
         }
+        double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(start-lastImageWrite).count();
+        if (saveImages && timeSinceWrite > imageInterval) {
+            sprintf(str, "%s/raw_img_%d.png", dirname, imageWriteIndex);
+            imwrite(str, img);
+            imageWriteIndex++;
+            lastImageWrite = start;
+        }
         switch (tracking) {
         case BALL:
             ballDetection(img, 0);
@@ -241,6 +266,7 @@ int main()
             targetDetection(img, 0);
             break;
         }
+        // Note: img is dirty after running these functions
 
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
@@ -494,12 +520,15 @@ const double ballWidth = 0.6096; // meters
 Point2d lastBallPosition = {0, 0};
 deque<Point2d> lastBallPositions;
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
-SolutionLog ballPositions("balltrack.csv", {"frame", "time", "pos_px_x", "pos_px_y", "distance", "rotation"});
+SolutionLog ballPositions;
 int ballFrameCount = 0;
-auto startTime = std::chrono::high_resolution_clock::now();
 int hueSliMin = ballHueMin, hueSliMax = ballHueMax, satSliMin = ballSatMin, satSliMax = ballSatMax, valSliMin = ballValMin, valSliMax = ballValMax;
 void ballDetection(Mat img, int)
 {
+    if (!ballPositions.isOpen()) {
+        sprintf(str, "%s/balltrack.csv", dirname);
+        ballPositions.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
+    }
     assert(inputType == COLOR); // Ball can only be detected on color image
     auto timeNow = std::chrono::high_resolution_clock::now();
     double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;
@@ -613,11 +642,11 @@ void ballDetection(Mat img, int)
                 + QByteArray::number(angleToBall) + " "
                 + QByteArray::number(ballVelocity);
 
-        udpSocket.writeDatagram(datagram.data(), datagram.size(), QHostAddress(0x0A110602), 80);
+        udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 80);
     }
     if (ballPositions.isOpen()) {
         double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
-        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).flush();
+        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).log("image", imageWriteIndex).flush();
     } else {
         cerr << "Unable to write solutions log" << endl;
     }
