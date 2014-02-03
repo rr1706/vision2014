@@ -18,11 +18,13 @@ TEMPLATE = app
 
 SOURCES += \
     main.cpp \
-    solutionlog.cpp
+    solutionlog.cpp \
+    xyh.cpp
 
 LIBS += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_calib3d
 QMAKE_CXXFLAGS += -std=c++0x
 
 HEADERS += \
     util.hpp \
-    solutionlog.hpp
+    solutionlog.hpp \
+    xyh.hpp
