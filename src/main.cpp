@@ -31,16 +31,16 @@ char str[255];
 
 // keys
 const char KEY_QUIT = 27;
-const char KEY_SAVE = 's';
+const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
 const InputSource mode = CAMERA;
-const int cameraId = 0;
+const int cameraId = 1;
 const ColorSystem inputType = COLOR;
 const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
-const bool displayImage = true;
+// displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
 const bool doUdp = true;
 const QHostAddress udpRecipient(0xC049EE66);
@@ -49,8 +49,9 @@ const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
 
 // Values for threshold IR
-const int gray_min = 245;
-const int gray_max = 255;
+
+int gray_min = 245;
+int gray_max = 255;
 
 // Values for threshold RGB
 const int hue_min = 35;
@@ -61,20 +62,20 @@ const int value_min = 140;
 const int value_max = 255;
 
 // Values for threshold ball track
-const uchar ballHueMin = color == RED ? 115 : 31;
-const uchar ballHueMax = color == RED ? 150 : 128;
+uchar ballHueMin = color == RED ? 115 : 31;
+uchar ballHueMax = color == RED ? 150 : 128;
 //const uchar ballHueMinUpper = color == RED ? 150 : 31;
 //const uchar ballHueMaxUpper = color == RED ? 255 : 128;
-const uchar ballSatMin = color == RED ? 116 : 92;
-const uchar ballSatMax = color == RED ? 255 : 202;
-const uchar ballValMin = color == RED ? 100 : 0;
-const uchar ballValMax = color == RED ? 255 : 158;
+uchar ballSatMin = color == RED ? 116 : 92;
+uchar ballSatMax = color == RED ? 255 : 202;
+uchar ballValMin = color == RED ? 100 : 0;
+uchar ballValMax = color == RED ? 255 : 158;
 const int ballSidesMin = 5; // for a circle
 const int ballMinArea = 50;
 
 // for approxpolydp
-const int accuracy = 3; //maximum distance between the original curve and its approximation
-const int contourMinArea = 50;
+int accuracy = 3; //maximum distance between the original curve and its approximation
+int contourMinArea = 50;
 
 const float calibrationRange = 2.724; // meters
 const float calibrationPixels = 10; // pixels
@@ -94,10 +95,18 @@ auto lastImageWrite = std::chrono::high_resolution_clock::now();
 int IMAGE_WIDTH = 0;
 int IMAGE_HEIGHT = 0;
 int imageWriteIndex = 0;
+int dilations = 1;
+WindowMode::WindowMode displayMode = WindowMode::FINAL;
 
 char dirname[255];
 time_t rawtime;
 struct tm* timeinfo;
+const string windowName = "2014";
+Thresh::Part currentThreshold = Thresh::HUE_MIN;
+const int CHANGE_THRESH = 5;
+const int CHANGE_AREA = 20;
+const int CHANGE_ACCURACY = 1;
+const int CHANGE_DILATE = 1;
 
 template<class ArrayOfPoints>
 void T2B_L2R(ArrayOfPoints pt)
@@ -204,13 +213,10 @@ int main()
         IMAGE_HEIGHT = inframe.rows;
         IMAGE_WIDTH = inframe.cols;
     }
-    if (displayImage) {
-        namedWindow("Final", CV_WINDOW_NORMAL);
-        namedWindow("Dilate", CV_WINDOW_NORMAL);
-        moveWindow("Final", 840, 0);
-        resizeWindow("Final", 640, 480);
-        moveWindow("Dilate", 0, 0);
-        resizeWindow("Dilate", 640, 480);
+    if (displayMode != WindowMode::NONE) {
+        namedWindow(windowName, CV_WINDOW_NORMAL);
+        moveWindow(windowName, 840, 0);
+        resizeWindow(windowName, 640, 480);
     }
     if (mkdir(dirname, 0755) == -1) {
         strcpy(dirname, ".");
@@ -250,6 +256,117 @@ int main()
         case 'p':
             waitKey();
             break;
+        case '-':
+            switch (displayMode) {
+            case WindowMode::THRESHOLD:
+                switch (currentThreshold) {
+                case Thresh::HUE_MIN:
+                    ballHueMin -= CHANGE_THRESH;
+                    break;
+                case Thresh::HUE_MAX:
+                    ballHueMax -= CHANGE_THRESH;
+                    break;
+                case Thresh::SAT_MIN:
+                    ballSatMin -= CHANGE_THRESH;
+                    break;
+                case Thresh::SAT_MAX:
+                    ballSatMax -= CHANGE_THRESH;
+                    break;
+                case Thresh::VAL_MIN:
+                    ballValMin -= CHANGE_THRESH;
+                    break;
+                case Thresh::VAL_MAX:
+                    ballValMax -= CHANGE_THRESH;
+                    break;
+                case Thresh::IR_MIN:
+                    gray_min -= CHANGE_THRESH;
+                    break;
+                case Thresh::IR_MAX:
+                    gray_max -= CHANGE_THRESH;
+                    break;
+                }
+                break;
+            case WindowMode::DILATE:
+                dilations -= CHANGE_DILATE;
+                break;
+            case WindowMode::CONTOURS:
+                contourMinArea -= CHANGE_AREA;
+                break;
+            case WindowMode::APPROXPOLY:
+                accuracy -= CHANGE_ACCURACY;
+                break;
+            }
+            break;
+        case '+':
+            switch (displayMode) {
+            case WindowMode::THRESHOLD:
+                switch (currentThreshold) {
+                case Thresh::HUE_MIN:
+                    ballHueMin += CHANGE_THRESH;
+                    break;
+                case Thresh::HUE_MAX:
+                    ballHueMax += CHANGE_THRESH;
+                    break;
+                case Thresh::SAT_MIN:
+                    ballSatMin += CHANGE_THRESH;
+                    break;
+                case Thresh::SAT_MAX:
+                    ballSatMax += CHANGE_THRESH;
+                    break;
+                case Thresh::VAL_MIN:
+                    ballValMin += CHANGE_THRESH;
+                    break;
+                case Thresh::VAL_MAX:
+                    ballValMax += CHANGE_THRESH;
+                    break;
+                case Thresh::IR_MIN:
+                    gray_min += CHANGE_THRESH;
+                    break;
+                case Thresh::IR_MAX:
+                    gray_max += CHANGE_THRESH;
+                    break;
+                }
+                break;
+            case WindowMode::DILATE:
+                dilations += CHANGE_DILATE;
+                break;
+            case WindowMode::CONTOURS:
+                contourMinArea += CHANGE_AREA;
+                break;
+            case WindowMode::APPROXPOLY:
+                accuracy += CHANGE_ACCURACY;
+                break;
+            }
+            break;
+        case 'h' :
+            currentThreshold = Thresh::HUE_MIN;
+            break;
+        case 'H':
+            currentThreshold = Thresh::HUE_MAX;
+            break;
+        case 's' :
+            currentThreshold = Thresh::SAT_MIN;
+            break;
+        case 'S':
+            currentThreshold = Thresh::SAT_MAX;
+            break;
+        case 'v' :
+            currentThreshold = Thresh::VAL_MIN;
+            break;
+        case 'V':
+            currentThreshold = Thresh::VAL_MAX;
+            break;
+        case 'i':
+            currentThreshold = Thresh::IR_MIN;
+            break;
+        case 'I':
+            currentThreshold = Thresh::IR_MAX;
+            break;
+        default:
+            if (key >= '0' && key <= '9') {
+                int ikey = key - '0';
+                displayMode = static_cast<WindowMode::WindowMode>(ikey);
+            }
         }
         double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(start-lastImageWrite).count();
         if (saveImages && timeSinceWrite > imageInterval) {
@@ -303,11 +420,13 @@ void targetDetection(Mat img, int)
     } else if (inputType == COLOR) {
         cvtColor(img, img, CV_BGR2HSV);
     }
-    if (displayImage) {
+    if (displayMode == WindowMode::RAW) {
         Mat input = dst.clone();
+        cvtColor(input, input, inputType == IR ? CV_GRAY2RGB : CV_HSV2RGB);
+        Window::print("Ratchet Rockers 1706", input, Point(IMAGE_WIDTH - 200, 15));
         sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
-        putText(input, str, Point(5,5), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        imshow("Input", input);
+        putText(input, str, Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+        imshow(windowName, input);
     }
 
     // "Threshold" image to pixels in the ranges
@@ -316,13 +435,55 @@ void targetDetection(Mat img, int)
     } else if (inputType == COLOR) {
         inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
     }
+    if (displayMode == WindowMode::THRESHOLD) {
+        Mat thresh = img.clone();
+        cvtColor(thresh, thresh, CV_GRAY2RGB); // binary image at this point
+        Window::print("Ratchet Rockers 1706", thresh, Point(IMAGE_WIDTH - 200, 15));
+        sprintf(str, "%d - Threshold", displayMode);
+        Window::print(string(str), thresh, Point(5, 15));
+        int curThreshVal;
+        switch (currentThreshold) {
+        case Thresh::HUE_MIN:
+            curThreshVal = ballHueMin;
+            break;
+        case Thresh::HUE_MAX:
+            curThreshVal = ballHueMax;
+            break;
+        case Thresh::SAT_MIN:
+            curThreshVal = ballSatMin;
+            break;
+        case Thresh::SAT_MAX:
+            curThreshVal = ballSatMax;
+            break;
+        case Thresh::VAL_MIN:
+            curThreshVal = ballValMin;
+            break;
+        case Thresh::VAL_MAX:
+            curThreshVal = ballValMax;
+            break;
+        case Thresh::IR_MIN:
+            curThreshVal = gray_min;
+            break;
+        case Thresh::IR_MAX:
+            curThreshVal = gray_max;
+            break;
+        }
+        sprintf(str, "%s: %d", Thresh::str(currentThreshold).c_str(), curThreshVal);
+        Window::print(string(str), thresh, Point(5, 30));
+        imshow(windowName, thresh);
+    }
 
     // Get rid of remaining noise
-    dilate(img, img, kernel);
-    erode(img, img, kernel, Point(-1, -1), 2);
-
-    if (displayImage) {
-        imshow("Dialate", img);
+//    dilate(img, img, kernel);
+//    erode(img, img, kernel, Point(-1, -1), 2);
+    morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
+    if (displayMode == WindowMode::DILATE) {
+        Mat dilate = img.clone();
+//        cvtColor(img, img, inputType == IR ? )
+        Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
+        sprintf(str, "%d - Dilate", displayMode);
+        putText(dilate, str, Point(5,15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255,0,255),1,8,false);
+        imshow(windowName, dilate);
     }
 
     // Declare containers for contours and contour heirarchy
@@ -352,6 +513,7 @@ void targetDetection(Mat img, int)
     double Image_Heigh_in = 0;
     double Plane_Distance = 0;
     float Tan_FOV_Y_Half = 1.46;
+    Mat contoursImg = dst.clone().zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_64F);
 
     // Create a for loop to go through each contour (i) one at a time
     for( unsigned int i = 0; i < contours.size(); i++ )
@@ -363,9 +525,15 @@ void targetDetection(Mat img, int)
             failedArea++;
             continue;
         }
+        if (displayMode == WindowMode::CONTOURS) {
+            drawContours(contoursImg, contours, i, Scalar(255, 255, 0));
+        }
         vector<Point> polygon;
         approxPolyDP( contour, polygon, accuracy, true );
         vector<vector<Point>> contoursDrawWrapper {polygon};
+        if (displayMode == WindowMode::APPROXPOLY) {
+            drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
+        }
         Rect boundRect = boundingRect(polygon);
         rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
 
@@ -432,7 +600,15 @@ void targetDetection(Mat img, int)
             //contour is the short and wide, dynamic target
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
-            drawContours(dst, contoursDrawWrapper,0, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
+//            drawContours(dst, contoursDrawWrapper,0, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
+        }
+        if (displayMode == WindowMode::PASS) {
+            drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
+        }
+        if (displayMode == WindowMode::CONTOURS || displayMode == WindowMode::APPROXPOLY || displayMode == WindowMode::PASS) {
+            WindowMode::print(displayMode, contoursImg);
+            Window::print("Ratchet Rockers 1706", contoursImg, Point(IMAGE_WIDTH - 200, 15));
+            imshow(windowName, contoursImg);
         }
     }
     cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
@@ -509,8 +685,10 @@ void targetDetection(Mat img, int)
     line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
     line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
     /// Show Images
-    if (displayImage) {
-        imshow("Final", dst);
+    if (displayMode == WindowMode::FINAL) {
+        WindowMode::print(displayMode, dst);
+        Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, dst);
     }
 }
 
@@ -522,7 +700,6 @@ deque<Point2d> lastBallPositions;
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
 SolutionLog ballPositions;
 int ballFrameCount = 0;
-int hueSliMin = ballHueMin, hueSliMax = ballHueMax, satSliMin = ballSatMin, satSliMax = ballSatMax, valSliMin = ballValMin, valSliMax = ballValMax;
 void ballDetection(Mat img, int)
 {
     if (!ballPositions.isOpen()) {
@@ -533,26 +710,95 @@ void ballDetection(Mat img, int)
     auto timeNow = std::chrono::high_resolution_clock::now();
     double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;
     Mat dst = img.clone();
+    if (displayMode == WindowMode::RAW) {
+        WindowMode::print(displayMode, dst);
+        Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, dst);
+    }
     cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
-    if (displayImage) {
-        createTrackbar("Hue_min", "Dilate", &hueSliMin, 255, 0);
-        createTrackbar("Hue_max", "Dilate", &hueSliMax, 255, 0);
-        createTrackbar("Sat_min", "Dilate", &satSliMin, 255, 0);
-        createTrackbar("Sat_max", "Dilate", &satSliMax, 255, 0);
-        createTrackbar("Val_min", "Dilate", &valSliMin, 255, 0);
-        createTrackbar("Val_max", "Dilate", &valSliMax, 255, 0);
+    if (displayMode == WindowMode::DILATE) {
+//        createTrackbar("Hue_min", windowName, &hueSliMin, 255, 0);
+//        createTrackbar("Hue_max", windowName, &hueSliMax, 255, 0);
+//        createTrackbar("Sat_min", windowName, &satSliMin, 255, 0);
+//        createTrackbar("Sat_max", windowName, &satSliMax, 255, 0);
+//        createTrackbar("Val_min", windowName, &valSliMin, 255, 0);
+//        createTrackbar("Val_max", windowName, &valSliMax, 255, 0);
     }
     // Threshold image to
-    inRange(img, Scalar(hueSliMin, satSliMin, valSliMin), Scalar(hueSliMax, satSliMax, valSliMax), img);
+    inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
+    if (displayMode == WindowMode::THRESHOLD) {
+        Mat thresh = img.clone();
+        cvtColor(thresh, thresh, CV_GRAY2RGB);
+        WindowMode::print(displayMode, thresh);
+        int curThreshVal;
+        switch (currentThreshold) {
+        case Thresh::HUE_MIN:
+            curThreshVal = ballHueMin;
+            break;
+        case Thresh::HUE_MAX:
+            curThreshVal = ballHueMax;
+            break;
+        case Thresh::SAT_MIN:
+            curThreshVal = ballSatMin;
+            break;
+        case Thresh::SAT_MAX:
+            curThreshVal = ballSatMax;
+            break;
+        case Thresh::VAL_MIN:
+            curThreshVal = ballValMin;
+            break;
+        case Thresh::VAL_MAX:
+            curThreshVal = ballValMax;
+            break;
+        }
+        sprintf(str, "%s: %d", Thresh::str(currentThreshold).c_str(), curThreshVal);
+        putText(thresh, str, Point(5, 30), CV_FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(255,0,255), 1, 8, false);
+        Window::print("Ratchet Rockers 1706", thresh, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, thresh);
+    }
     // Get rid of remaining noise
-    morphologyEx(img, img, MORPH_OPEN, kernel);
-    if (displayImage) {
-        imshow("Dilate", img);
+    morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations);
+    if (displayMode == WindowMode::DILATE) {
+        Mat dilate = img.clone();
+        cvtColor(dilate, dilate, CV_GRAY2RGB);
+        WindowMode::print(displayMode, dilate);
+        sprintf(str, "Dilations: %d", dilations);
+        putText(dilate, str, Point(5, 30), CV_FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(255,0,255), 1, 8, false);
+        Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, dilate);
     }
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
     findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
+    if (displayMode == WindowMode::CONTOURS || displayMode == WindowMode::APPROXPOLY) {
+        Mat contoursImg = Mat::zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8U);
+        cvtColor(contoursImg, contoursImg, CV_GRAY2RGB);
+        for ( unsigned int i = 0; i < contours.size(); i++) {
+            vector<Point> contour = contours[i];
+            if (contourArea(contour) < contourMinArea) {
+                continue;
+            }
+            if (displayMode == WindowMode::CONTOURS) {
+                drawContours(contoursImg, contours, i, Scalar(255, 255, 0));
+            }
+            if (displayMode == WindowMode::APPROXPOLY) {
+                Point2f ballCenterFlat;
+                float radius;
+                minEnclosingCircle(contour, ballCenterFlat, radius);
+                circle(contoursImg, ballCenterFlat, (int)radius, Scalar(0, 0, 255), 2, 8, 0 );
+            }
+        }
+        if (displayMode == WindowMode::CONTOURS) {
+            sprintf(str, "Area: %d", contourMinArea);
+        } else if (displayMode == WindowMode::APPROXPOLY) {
+            sprintf(str, "Accuracy: %d", accuracy);
+        }
+        WindowMode::print(displayMode, contoursImg);
+        putText(contoursImg, str, Point(5, 30), CV_FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(255,0,255), 1, 8, false);
+        Window::print("Ratchet Rockers 1706", contoursImg, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, contoursImg);
+    }
     vector<vector<Point> > succeededContours = getSuccessfulContours(contours, ballTests);
     vector<vector<Point> > largestContour(static_cast<unsigned int>(1));
     for (vector<Point> &contour : succeededContours) {
@@ -566,6 +812,14 @@ void ballDetection(Mat img, int)
     }
     if (largestContour[0].size() == 0) {
         largestContour.pop_back();
+    }
+    if (displayMode == WindowMode::PASS) {
+        Mat pass = Mat::zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8U);
+        cvtColor(pass, pass, CV_GRAY2RGB);
+        drawContours(pass, largestContour, 0, Scalar(255, 255, 0));
+        WindowMode::print(displayMode, pass);
+        Window::print("Ratchet Rockers 1706", pass, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, pass);
     }
     double angleToBall = 0;
     double ballVelocity = 0;
@@ -633,8 +887,10 @@ void ballDetection(Mat img, int)
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
-    if (displayImage) {
-        imshow("Final", dst);
+    if (displayMode == WindowMode::FINAL) {
+        WindowMode::print(displayMode, dst);
+        Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, dst);
     }
     if (doUdp) {
         QByteArray datagram = "balltrack "
@@ -642,7 +898,7 @@ void ballDetection(Mat img, int)
                 + QByteArray::number(angleToBall) + " "
                 + QByteArray::number(ballVelocity);
 
-        udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 80);
+        udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
     }
     if (ballPositions.isOpen()) {
         double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
