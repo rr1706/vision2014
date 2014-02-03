@@ -717,14 +717,6 @@ void ballDetection(Mat img, int)
     }
     cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
-    if (displayMode == WindowMode::DILATE) {
-//        createTrackbar("Hue_min", windowName, &hueSliMin, 255, 0);
-//        createTrackbar("Hue_max", windowName, &hueSliMax, 255, 0);
-//        createTrackbar("Sat_min", windowName, &satSliMin, 255, 0);
-//        createTrackbar("Sat_max", windowName, &satSliMax, 255, 0);
-//        createTrackbar("Val_min", windowName, &valSliMin, 255, 0);
-//        createTrackbar("Val_max", windowName, &valSliMax, 255, 0);
-    }
     // Threshold image to
     inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
     if (displayMode == WindowMode::THRESHOLD) {
