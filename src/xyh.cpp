@@ -1,6 +1,5 @@
 /*
-Cindy Gaines
-January 2014
+Version 16 - Added check for not to try and compute heading unless you have both the P and R for a target.
 
 Find the Robot Coordinates (xR, yR, and Heading) with respect to the corner of the playing field as the origin.
 
@@ -130,7 +129,7 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     double xsum=0;
     double ysum=0;
 
-    // Have no sR value so just return.
+    // Have no R values so just return.
     if (R1<=0 && R2<=0 && R3<=0 && R4<=0)
         return;
 
@@ -599,7 +598,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
 
 
 // CHECK CAMERA 1 SEES TARGETS 1 to 8
-    if (P[1][1]>=0) //If Camera 1 sees Target 1:
+    if (P[1][1]>=0 && R1>0) //If Camera 1 sees Target 1:
     {
         iH++;
         H = -60 - (180/3.14159)*asin((yR-y1t)/R1) - (P[1][1] - 640)*120./1280;
@@ -610,7 +609,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][2]>=0) //If Camera 1 sees Target 2:
+    if (P[1][2]>=0 && R2>0) //If Camera 1 sees Target 2:
     {
         iH++;
         H = -60 + (180/3.14159)*asin((y2t-yR)/R2) - (P[1][2] - 640)*120./1280;
@@ -621,7 +620,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][3]>=0) //If Camera 1 sees Target 3:
+    if (P[1][3]>=0 && R3>0) //If Camera 1 sees Target 3:
     {
         iH++;
         H = +120 - (180/3.14159)*asin((y3t-yR)/R3) - (P[1][3] - 640)*120./1280;
@@ -632,7 +631,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][4]>=0) //If Camera 1 sees Target 4:
+    if (P[1][4]>=0 && R4>0) //If Camera 1 sees Target 4:
     {
         iH++;
         H = +120 + (180/3.14159)*asin((yR-y4t)/R4) - (P[1][4] - 640)*120./1280;
@@ -643,7 +642,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][5]>=0) //If Camera 1 sees Target 5:
+    if (P[1][5]>=0 && R5>0) //If Camera 1 sees Target 5:
     {
         iH++;
         H = -60 - (180/3.14159)*asin((yR-y5t)/R5) - (P[1][5] - 640)*120./1280;
@@ -654,7 +653,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][6]>=0) //If Camera 1 sees Target 6:
+    if (P[1][6]>=0 && R6>0) //If Camera 1 sees Target 6:
     {
         iH++;
         H = -60 + (180/3.14159)*asin((y6t-yR)/R6) - (P[1][6] - 640)*120./1280;
@@ -665,7 +664,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][7]>=0) //If Camera 1 sees Target 7:
+    if (P[1][7]>=0 && R7>0) //If Camera 1 sees Target 7:
     {
         iH++;
         H = +120 - (180/3.14159)*asin((y7t-yR)/R7) - (P[1][7] - 640)*120./1280;
@@ -676,7 +675,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[1][8]>=0) //If Camera 1 sees Target 8:
+    if (P[1][8]>=0 && R8>0) //If Camera 1 sees Target 8:
     {
         iH++;
         H = +120 + (180/3.14159)*asin((yR-y8t)/R8) - (P[1][8] - 640)*120./1280;
@@ -690,7 +689,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
 
 
 // CHECK CAMERA 2 SEES TARGETS 1 to 8
-   if (P[2][1]>=0) //If Camera 2 sees Target 1:
+   if (P[2][1]>=0 && R1>0) //If Camera 2 sees Target 1:
     {
         iH++;
         H = -180 - (180/3.14159)*asin((yR-y1t)/R1) - (P[2][1] - 640)*120./1280;
@@ -701,7 +700,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][2]>=0) //If Camera 2 sees Target 2:
+    if (P[2][2]>=0 && R2>0) //If Camera 2 sees Target 2:
     {
         iH++;
         H = -180 + (180/3.14159)*asin((y2t-yR)/R2) - (P[2][2] - 640)*120./1280;
@@ -712,7 +711,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][3]>=0) //If Camera 2 sees Target 3:
+    if (P[2][3]>=0 && R3>0) //If Camera 2 sees Target 3:
     {
         iH++;
         H = 0 - (180/3.14159)*asin((y3t-yR)/R3) - (P[2][3] - 640)*120./1280;
@@ -723,7 +722,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][4]>=0) //If Camera 2 sees Target 4:
+    if (P[2][4]>=0 && R4>0) //If Camera 2 sees Target 4:
     {
         iH++;
         H = 0 + (180/3.14159)*asin((yR-y4t)/R4) - (P[2][4] - 640)*120./1280;
@@ -734,7 +733,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][5]>=0) //If Camera 2 sees Target 5:
+    if (P[2][5]>=0 && R5>0) //If Camera 2 sees Target 5:
     {
         iH++;
         H = -180 - (180/3.14159)*asin((yR-y5t)/R5) - (P[2][5] - 640)*120./1280;
@@ -745,7 +744,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][6]>=0) //If Camera 2 sees Target 6:
+    if (P[2][6]>=0 && R6>0) //If Camera 2 sees Target 6:
     {
         iH++;
         H = -180 + (180/3.14159)*asin((y6t-yR)/R6) - (P[2][6] - 640)*120./1280;
@@ -756,7 +755,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][7]>=0) //If Camera 2 sees Target 7:
+    if (P[2][7]>=0 && R7>0) //If Camera 2 sees Target 7:
     {
         iH++;
         H = 0 - (180/3.14159)*asin((y7t-yR)/R7) - (P[2][7] - 640)*120./1280;
@@ -767,7 +766,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[2][8]>=0) //If Camera 2 sees Target 8:
+    if (P[2][8]>=0 && R8>0) //If Camera 2 sees Target 8:
     {
         iH++;
         H = 0 + (180/3.14159)*asin((yR-y8t)/R8) - (P[2][8] - 640)*120./1280;
@@ -782,7 +781,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
 
 
 // CHECK CAMERA 3 SEES TARGETS 1 to 8
-    if (P[3][1]>=0) //If Camera 3 sees Target 1:
+    if (P[3][1]>=0 && R1>0) //If Camera 3 sees Target 1:
     {
         iH++;
         H = +60 - (180/3.14159)*asin((yR-y1t)/R1) - (P[3][1] - 640)*120./1280;
@@ -793,7 +792,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][2]>=0) //If Camera 3 sees Target 2:
+    if (P[3][2]>=0 && R2>0) //If Camera 3 sees Target 2:
     {
         iH++;
         H = +60 + (180/3.14159)*asin((y2t-yR)/R2) - (P[3][2] - 640)*120./1280;
@@ -804,7 +803,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][3]>=0) //If Camera 3 sees Target 3:
+    if (P[3][3]>=0 && R3>0) //If Camera 3 sees Target 3:
     {
         iH++;
         H = -120 - (180/3.14159)*asin((y3t-yR)/R3) - (P[3][3] - 640)*120./1280;
@@ -815,7 +814,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][4]>=0) //If Camera 3 sees Target 4:
+    if (P[3][4]>=0 && R4>0) //If Camera 3 sees Target 4:
     {
         iH++;
         H = -120 + (180/3.14159)*asin((yR-y4t)/R4) - (P[3][4] - 640)*120./1280;
@@ -826,7 +825,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][5]>=0) //If Camera 3 sees Target 5:
+    if (P[3][5]>=0 && R5>0) //If Camera 3 sees Target 5:
     {
         iH++;
         H = +60 - (180/3.14159)*asin((yR-y5t)/R5) - (P[3][5] - 640)*120./1280;
@@ -837,7 +836,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][6]>=0) //If Camera 3 sees Target 6:
+    if (P[3][6]>=0 && R6>0) //If Camera 3 sees Target 6:
     {
         iH++;
         H = +60 + (180/3.14159)*asin((y6t-yR)/R6) - (P[3][6] - 640)*120./1280;
@@ -848,7 +847,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][7]>=0) //If Camera 3 sees Target 7:
+    if (P[3][7]>=0 && R7>0) //If Camera 3 sees Target 7:
     {
         iH++;
         H = -120 - (180/3.14159)*asin((y7t-yR)/R7) - (P[3][7] - 640)*120./1280;
@@ -859,7 +858,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         Hsum=Hsum+H;
         cout<<H<<endl;
     }
-    if (P[3][8]>=0) //If Camera 3 sees Target 8:
+    if (P[3][8]>=0 && R8>0) //If Camera 3 sees Target 8:
     {
         iH++;
         H = -120 + (180/3.14159)*asin((yR-y8t)/R8) - (P[3][8] - 640)*120./1280;
