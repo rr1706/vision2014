@@ -66,7 +66,7 @@ int test()
 {
 
     double TestR1, TestR2, TestR3, TestR4, TestR5, TestR6, TestR7, TestR8;
-    int P[4][9];
+    int P[3][8];
     int i,j;
 
     // Just create a window for later.
@@ -81,10 +81,10 @@ int test()
     TestR1=180;
     TestR2=240;
     TestR3=TestR4=TestR5=TestR6=TestR7=TestR8=0;
-    for (i=1; i<=3; i++)
-       for (j=1; j<=8; j++)
+    for (i=0; i<3; i++)
+       for (j=0; j<8; j++)
            P[i][j]=-1;
-    P[1][2]=170;
+    P[0][1]=170;
 
 
 
@@ -106,7 +106,7 @@ int test()
  * If you don’t have a value for a Range, enter it as zero.
  * If you don’t have a pixel for a camera and target pair, enter it as -1.
 */
-void FindXYH(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int P[4][9], double &xPos, double &yPos, double &heading)
+void FindXYH(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int P[3][8], double &xPos, double &yPos, double &heading)
 {
     FindXY(R1, R2, R3, R4, R5, R6, R7, R8);
     FindHeading(R1, R2, R3, R4, R5, R6, R7, R8, P);
@@ -584,8 +584,14 @@ void SelectSolutionForOppositeCorners(double ixl, double iyl, double xsuml, doub
  *Note:  No correction to heading are needed when you change origins from horizontal target to the corner of the field.
 */
 
-void FindHeading(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int P[4][9])
+void FindHeading(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int arr[3][8])
 {
+    int P[4][9];
+    for (uint i = 0; i < 3; i++) {
+        for (uint j = 0; j < 8; j++) {
+           arr[i + 1][j + 1] = arr[i][j];
+        }
+    }
     //Use to average if have more than one solution for heading.
     double Hsum=0;
     int iH=0;
