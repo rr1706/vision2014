@@ -16,11 +16,12 @@ If you don’t have a value for a Range, enter it as zero.  If you don’t have 
 This function will then generate (xR, yR, H) in inches and degrees.  If multiple solutions are available, they will be averaged.
 */
 
-#include <opencv2/opencv.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <iostream>
+#include <math.h>
+#include <stdlib.h>
+#include <fstream>
 #include "iomanip"
 #include "xyh.hpp"
-using namespace cv;
 using namespace std;
 
 
@@ -62,19 +63,14 @@ static double xMinus;
 static double yPlus;
 static double yMinus;
 
+std::ofstream ofs ("xyh.log", std::ofstream::out);
+
 int test()
 {
 
     double TestR1, TestR2, TestR3, TestR4, TestR5, TestR6, TestR7, TestR8;
     int P[3][8];
     int i,j;
-
-    // Just create a window for later.
-    namedWindow("Robot View",CV_WINDOW_NORMAL);
-//    resizeWindow("Robot View",640,480);
-//    moveWindow("Robot View",0,400);
-    waitKey(1);
-
 
 
     // Example:
@@ -133,20 +129,20 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     if (R1<=0 && R2<=0 && R3<=0 && R4<=0)
         return;
 
-    cout<<"R Values    (xPlus,yPlus)   (xMinus,yMinus)  Selected"<<endl;
-    cout<<fixed<<showpoint;
-    cout<<setprecision(2);
+    ofs<<"R Values    (xPlus,yPlus)   (xMinus,yMinus)  Selected"<<endl;
+    ofs<<fixed<<showpoint;
+    ofs<<setprecision(2);
 
 // FIRST LOOK FOR SOLUTIONS USING ADJACENT CORNERS.
 
     // HORIZONTAL TARGETS: There are 4 opportunities to find a solutions using targets at adjacent corners.
     if (R1>0 && R2>0)
     {
-        cout<<"R1 and R2";
+        ofs<<"R1 and R2";
         FindPlusMinusSolutionInFieldCooridinates(R1, R2, x1t, y1t, x2t, y2t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -154,11 +150,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R1>0 && R4>0)
     {
-        cout<<"R1 and R4";
+        ofs<<"R1 and R4";
         FindPlusMinusSolutionInFieldCooridinates(R1, R4, x1t, y1t, x4t, y4t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -166,11 +162,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R2>0 && R3>0)
     {
-        cout<<"R2 and R3";
+        ofs<<"R2 and R3";
         FindPlusMinusSolutionInFieldCooridinates(R2, R3, x2t, y2t, x3t, y3t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -178,11 +174,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R3>0 && R4>0)
     {
-        cout<<"R3 and R4";
+        ofs<<"R3 and R4";
         FindPlusMinusSolutionInFieldCooridinates(R3, R4, x3t, y3t, x4t, y4t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -192,11 +188,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     // VERTICAL TARGETS: There are 4 opportunities to find a solutions using targets at adjacent corners.
     if (R5>0 && R6>0)
     {
-        cout<<"R5 and R6";
+        ofs<<"R5 and R6";
         FindPlusMinusSolutionInFieldCooridinates(R5, R6, x5t, y5t, x6t, y6t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -204,11 +200,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R5>0 && R8>0)
     {
-        cout<<"R5 and R8";
+        ofs<<"R5 and R8";
         FindPlusMinusSolutionInFieldCooridinates(R5, R8, x5t, y5t, x8t, y8t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -216,11 +212,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R6>0 && R7>0)
     {
-        cout<<"R6 and R7";
+        ofs<<"R6 and R7";
         FindPlusMinusSolutionInFieldCooridinates(R6, R7, x6t, y6t, x7t, y7t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -228,11 +224,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R7>0 && R8>0)
     {
-        cout<<"R7 and R8";
+        ofs<<"R7 and R8";
         FindPlusMinusSolutionInFieldCooridinates(R7, R8, x7t, y7t, x8t, y8t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -242,11 +238,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
  // MIX HORIZONTAL AND VERTICAL TARGETS: There are 8 opportunities to find a solutions using targets at adjacent corners.
     if (R1>0 && R6>0)
     {
-        cout<<"R1 and R6";
+        ofs<<"R1 and R6";
         FindPlusMinusSolutionInFieldCooridinates(R1, R6, x1t, y1t, x6t, y6t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -254,11 +250,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R1>0 && R8>0)
     {
-        cout<<"R1 and R8";
+        ofs<<"R1 and R8";
         FindPlusMinusSolutionInFieldCooridinates(R1, R8, x1t, y1t, x8t, y8t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -266,11 +262,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R2>0 && R5>0)
     {
-        cout<<"R2 and R5";
+        ofs<<"R2 and R5";
         FindPlusMinusSolutionInFieldCooridinates(R2, R5, x2t, y2t, x5t, y5t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -278,11 +274,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R2>0 && R7>0)
     {
-        cout<<"R2 and R7";
+        ofs<<"R2 and R7";
         FindPlusMinusSolutionInFieldCooridinates(R2, R7, x2t, y2t, x7t, y7t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -290,11 +286,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R3>0 && R6>0)
     {
-        cout<<"R3 and R6";
+        ofs<<"R3 and R6";
         FindPlusMinusSolutionInFieldCooridinates(R3, R6, x3t, y3t, x6t, y6t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -302,11 +298,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R3>0 && R8>0)
     {
-        cout<<"R3 and R8";
+        ofs<<"R3 and R8";
         FindPlusMinusSolutionInFieldCooridinates(R3, R8, x3t, y3t, x8t, y8t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -314,11 +310,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R4>0 && R5>0)
     {
-        cout<<"R4 and R5";
+        ofs<<"R4 and R5";
         FindPlusMinusSolutionInFieldCooridinates(R4, R5, x4t, y4t, x5t, y5t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -326,11 +322,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     }
     if (R4>0 && R7>0)
     {
-        cout<<"R4 and R7";
+        ofs<<"R4 and R7";
         FindPlusMinusSolutionInFieldCooridinates(R4, R7, x4t, y4t, x7t, y7t);
-        cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+        ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
         SelectSolutionForAdjacentCorners();
-        cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+        ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
         ix++;
         xsum=xsum+xR;
         iy++;
@@ -351,11 +347,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
     {
         if (R1>0 && R3>0)
         {
-            cout<<"R1 and R3";
+            ofs<<"R1 and R3";
             FindPlusMinusSolutionInFieldCooridinates(R1, R3, x1t, y1t, x3t, y3t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -363,11 +359,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         }
         if (R2>0 && R4>0)
         {
-            cout<<"R2 and R4";
+            ofs<<"R2 and R4";
             FindPlusMinusSolutionInFieldCooridinates(R2, R4, x2t, y2t, x4t, y4t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -377,11 +373,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         // HORIZONTAL TARGETS: There are 2 opportunities to find a solutions using targets at opposite corners.
         if (R5>0 && R7>0)
         {
-            cout<<"R5 and R7";
+            ofs<<"R5 and R7";
             FindPlusMinusSolutionInFieldCooridinates(R5, R7, x5t, y5t, x7t, y7t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -389,11 +385,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         }
         if (R6>0 && R8>0)
         {
-            cout<<"R6 and R8";
+            ofs<<"R6 and R8";
             FindPlusMinusSolutionInFieldCooridinates(R6, R8, x6t, y6t, x8t, y8t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -403,11 +399,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         // MIX OF HORIZONTAL AND VERTICAL TARGETS: There are 4 opportunities to find a solutions using targets at opposite corners.
         if (R1>0 && R7>0)
         {
-            cout<<"R1 and R7";
+            ofs<<"R1 and R7";
             FindPlusMinusSolutionInFieldCooridinates(R1, R7, x1t, y1t, x7t, y7t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -415,11 +411,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         }
         if (R2>0 && R8>0)
         {
-            cout<<"R2 and R8";
+            ofs<<"R2 and R8";
             FindPlusMinusSolutionInFieldCooridinates(R2, R8, x2t, y2t, x8t, y8t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -427,11 +423,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         }
         if (R3>0 && R5>0)
         {
-            cout<<"R3 and R5";
+            ofs<<"R3 and R5";
             FindPlusMinusSolutionInFieldCooridinates(R3, R5, x3t, y3t, x5t, y5t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -439,11 +435,11 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         }
         if (R4>0 && R6>0)
         {
-            cout<<"R4 and R6";
+            ofs<<"R4 and R6";
             FindPlusMinusSolutionInFieldCooridinates(R4, R6, x4t, y4t, x6t, y6t);
-            cout<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
+            ofs<<"    ("<<xPlus<<","<<yPlus<<")"<<"("<<xMinus<<","<<yMinus<<")";
             SelectSolutionForOppositeCorners(ix, iy, xsum, ysum);
-            cout<<"    ("<<xR<<","<<yR<<")"<<endl;
+            ofs<<"    ("<<xR<<","<<yR<<")"<<endl;
             ix++;
             xsum=xsum+xR;
             iy++;
@@ -457,7 +453,7 @@ void FindXY(double R1, double R2, double R3, double R4, double R5, double R6, do
         xR=xsum/ix;
         yR=ysum/iy;
     }
-    cout<<"The average of all solutions is "<<"("<<xR<<","<<yR<<")"<<endl;
+    ofs<<"The average of all solutions is "<<"("<<xR<<","<<yR<<")"<<endl;
 
 }
 
@@ -600,7 +596,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     int i,j;
     for (i=1; i<=3; i++)
         for (j=1; j<=8; j++)
-            cout<<"P["<<i<<"]["<<j<<"]="<<P[i][j]<<endl;
+            ofs<<"P["<<i<<"]["<<j<<"]="<<P[i][j]<<endl;
 
 
 // CHECK CAMERA 1 SEES TARGETS 1 to 8
@@ -613,7 +609,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][2]>=0 && R2>0) //If Camera 1 sees Target 2:
     {
@@ -624,7 +620,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][3]>=0 && R3>0) //If Camera 1 sees Target 3:
     {
@@ -635,7 +631,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][4]>=0 && R4>0) //If Camera 1 sees Target 4:
     {
@@ -646,7 +642,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][5]>=0 && R5>0) //If Camera 1 sees Target 5:
     {
@@ -657,7 +653,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][6]>=0 && R6>0) //If Camera 1 sees Target 6:
     {
@@ -668,7 +664,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][7]>=0 && R7>0) //If Camera 1 sees Target 7:
     {
@@ -679,7 +675,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[1][8]>=0 && R8>0) //If Camera 1 sees Target 8:
     {
@@ -690,7 +686,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
 
 
@@ -704,7 +700,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][2]>=0 && R2>0) //If Camera 2 sees Target 2:
     {
@@ -715,7 +711,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][3]>=0 && R3>0) //If Camera 2 sees Target 3:
     {
@@ -726,7 +722,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][4]>=0 && R4>0) //If Camera 2 sees Target 4:
     {
@@ -737,7 +733,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][5]>=0 && R5>0) //If Camera 2 sees Target 5:
     {
@@ -748,7 +744,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][6]>=0 && R6>0) //If Camera 2 sees Target 6:
     {
@@ -759,7 +755,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][7]>=0 && R7>0) //If Camera 2 sees Target 7:
     {
@@ -770,7 +766,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[2][8]>=0 && R8>0) //If Camera 2 sees Target 8:
     {
@@ -781,7 +777,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
 
 
@@ -796,7 +792,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][2]>=0 && R2>0) //If Camera 3 sees Target 2:
     {
@@ -807,7 +803,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][3]>=0 && R3>0) //If Camera 3 sees Target 3:
     {
@@ -818,7 +814,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][4]>=0 && R4>0) //If Camera 3 sees Target 4:
     {
@@ -829,7 +825,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][5]>=0 && R5>0) //If Camera 3 sees Target 5:
     {
@@ -840,7 +836,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][6]>=0 && R6>0) //If Camera 3 sees Target 6:
     {
@@ -851,7 +847,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][7]>=0 && R7>0) //If Camera 3 sees Target 7:
     {
@@ -862,7 +858,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
     if (P[3][8]>=0 && R8>0) //If Camera 3 sees Target 8:
     {
@@ -873,13 +869,13 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
         if (H<0)
             H=H+360;
         Hsum=Hsum+H;
-        cout<<H<<endl;
+        ofs<<H<<endl;
     }
 
 
 // COMPUTE THE AVERAGE OF ALL SOLUTIONS FOUND
     H=Hsum/iH;
-    cout<<"The average value of H is: "<<H<<endl;
+    ofs<<"The average value of H is: "<<H<<endl;
 
 }
 
