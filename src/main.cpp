@@ -32,7 +32,7 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const InputSource mode = CAMERA;
+const InputSource mode = IMAGE;
 const int cameraId = 1;
 const ColorSystem inputType = IR;
 const TrackMode tracking = TARGET;
@@ -328,7 +328,7 @@ void targetDetection(Mat img, int)
     double Plane_Distance, Plane_Distance_Dynamic = 0;
     float Tan_FOV_Y_Half = 1.46;
     double R[8] = {0};
-    int P[CAMERA_COUNT + 1][TARGET_COUNT];
+    int P[CAMERA_COUNT][TARGET_COUNT];
     for (uint pi = 0; pi < CAMERA_COUNT; pi++) {
         for (uint pj = 0; pj < TARGET_COUNT; pj++) {
             P[pi][pj] = -1;
@@ -471,10 +471,11 @@ void targetDetection(Mat img, int)
         //case left
         if (Static_Target.size() + Dynamic_Target.size() == 2) {
             targetCase = LEFT;
+            // TODO decrement each P value by 1
             R[0] = Plane_Distance_Dynamic;
             R[4] = Plane_Distance;
-            P[1][1] = Mass_Center_Static[0].x;
-            P[1][5] = Mass_Center_Dynamic[0].x;
+            P[0][0] = Mass_Center_Static[0].x;
+            P[0][4] = Mass_Center_Dynamic[0].x;
 
             // Coordinates of rectangle in camera
             pixel_coords.push_back (Point2d (284, 204));
@@ -505,8 +506,8 @@ void targetDetection(Mat img, int)
 
             R[4] = Plane_Distance_Dynamic;
             R[0] = Plane_Distance;
-            P[1][5] = Mass_Center_Static[0].x;
-            P[1][1]= Mass_Center_Dynamic[0].x;
+            P[0][4] = Mass_Center_Static[0].x;
+            P[0][0]= Mass_Center_Dynamic[0].x;
 
             // Coordinates of rectangle in camera
             pixel_coords.push_back (Point2d (284, 204));

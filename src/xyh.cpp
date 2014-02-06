@@ -589,7 +589,7 @@ void FindHeading(double R1, double R2, double R3, double R4, double R5, double R
     int P[4][9];
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 8; j++) {
-           arr[i + 1][j + 1] = arr[i][j];
+           P[i + 1][j + 1] = arr[i][j];
         }
     }
     //Use to average if have more than one solution for heading.
