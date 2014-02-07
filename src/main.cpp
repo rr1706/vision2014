@@ -32,7 +32,7 @@ const char KEY_SAVE = 's';
 const char KEY_SPEED = ' ';
 
 // config
-const InputSource mode = IMAGE;
+const InputSource mode = CAMERA;
 const int cameraId = 1;
 const ColorSystem inputType = IR;
 const TrackMode tracking = TARGET;
@@ -474,8 +474,8 @@ void targetDetection(Mat img, int)
             // TODO decrement each P value by 1
             R[0] = Plane_Distance_Dynamic;
             R[4] = Plane_Distance;
-            P[0][0] = Mass_Center_Static[0].x;
-            P[0][4] = Mass_Center_Dynamic[0].x;
+            P[0][4] = Mass_Center_Static[0].x;
+            P[0][0] = Mass_Center_Dynamic[0].x;
 
             // Coordinates of rectangle in camera
             pixel_coords.push_back (Point2d (284, 204));
@@ -578,6 +578,8 @@ void targetDetection(Mat img, int)
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+    sprintf(str, "Heading %f xR %f yR %f", heading, xPos, yPos);
+    putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     applyText(statusText, Point(5, 90), dst);
     //draw crosshairs
     line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
