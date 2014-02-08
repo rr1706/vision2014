@@ -37,9 +37,9 @@ const char KEY_SPEED = ' ';
 
 // config
 const InputSource mode = CAMERA;
-const int cameraId = 1;
-const ColorSystem inputType = COLOR;
-const TrackMode tracking = BALL;
+const int cameraId = 2;
+const ColorSystem inputType = IR;
+const TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -72,10 +72,10 @@ uchar ballSatMax = color == RED ? 255 : 202;
 uchar ballValMin = color == RED ? 100 : 0;
 uchar ballValMax = color == RED ? 255 : 158;
 const int ballSidesMin = 5; // for a circle
-const int ballMinArea = 50;
+const int ballMinArea = 250;
 
 // for approxpolydp
-int accuracy = 3; //maximum distance between the original curve and its approximation
+int accuracy = 6; //maximum distance between the original curve and its approximation
 int contourMinArea = 50;
 
 const float calibrationRange = 2.724; // meters
@@ -89,7 +89,16 @@ const Size winSize = Size( 5, 5 );
 const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
-map<const string, ContourConstraint> ballTests;
+vector<BallTest> ballTests = {
+    {"area", [](vector<Point> contour){
+         return contourArea(contour) > ballMinArea;
+     }},
+    {"sides", [](vector<Point> contour){
+         vector<Point> polygon;
+         approxPolyDP( contour, polygon, accuracy, true );
+         return polygon.size() >= ballSidesMin;
+     }}
+};
 auto startTime = std::chrono::high_resolution_clock::now();
 auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
@@ -111,66 +120,6 @@ const int CHANGE_DILATE = 1;
 const int CAMERA_COUNT = 3;
 const int TARGET_COUNT = 8;
 
-template<class ArrayOfPoints>
-void T2B_L2R(ArrayOfPoints pt)
-{
-    int temp_x;
-    int temp_y;
-
-    int i, swapped;
-
-    do {
-        swapped = 0;
-        for (i = 1; i < 4; i++)
-        {
-            if (pt[i-1].y > pt[i].y)
-            {
-                temp_x = pt[i-1].x;
-                temp_y = pt[i-1].y;
-                pt[i-1].x = pt[i].x;
-                pt[i-1].y = pt[i].y;
-                pt[i].x = temp_x;
-                pt[i].y = temp_y;
-                swapped = 1;
-            }
-        }
-    }
-    while (swapped == 1);
-
-    /// Make sure top two points are left to right
-    if (pt[0].x > pt[1].x)
-    {
-        temp_x = pt[0].x;
-        temp_y = pt[0].y;
-        pt[0].x = pt[1].x;
-        pt[0].y = pt[1].y;
-        pt[1].x = temp_x;
-        pt[1].y = temp_y;
-    }
-
-    /// Make sure bottom two points are left to right
-    if (pt[2].x > pt[3].x)
-    {
-        temp_x = pt[2].x;
-        temp_y = pt[2].y;
-        pt[2].x = pt[3].x;
-        pt[2].y = pt[3].y;
-        pt[3].x = temp_x;
-        pt[3].y = temp_y;
-    }
-}
-
-void applyText(vector<string> &text, Point startPos, Mat &img)
-{
-    int x = startPos.x;
-    int y = startPos.y;
-    std::vector<string>::const_iterator iterator;
-    for (iterator = text.begin(); iterator != text.end(); ++iterator) {
-        putText(img, (*iterator).c_str(), Point(x, y), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        y += 20;
-    }
-}
-
 void targetDetection(Mat img, int id);
 
 void ballDetection(Mat img, int id);
@@ -180,15 +129,6 @@ int main()
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     strftime(dirname,50,"%Y%m%d_%H%M%S",timeinfo);
-
-    ballTests.insert(pair<const string, ContourConstraint>("area", [](vector<Point> contour){
-                         return contourArea(contour) > ballMinArea;
-                     }));
-    ballTests.insert(pair<const string, ContourConstraint>("sides", [](vector<Point> contour){
-                         vector<Point> polygon;
-                         approxPolyDP( contour, polygon, accuracy, true );
-                         return polygon.size() >= ballSidesMin;
-                     }));
     VideoCapture camera;
     if (mode == CAMERA) {
         camera = VideoCapture(cameraId);
@@ -298,6 +238,8 @@ int main()
             case WindowMode::APPROXPOLY:
                 accuracy -= CHANGE_ACCURACY;
                 break;
+            default:
+                break;
             }
             break;
         case '+':
@@ -338,6 +280,8 @@ int main()
                 break;
             case WindowMode::APPROXPOLY:
                 accuracy += CHANGE_ACCURACY;
+                break;
+            default:
                 break;
             }
             break;
@@ -424,7 +368,7 @@ void targetDetection(Mat img, int)
         cvtColor(img, img, CV_BGR2HSV);
     }
     if (displayMode == WindowMode::RAW) {
-        Mat input = dst.clone();
+        Mat input = img.clone();
         cvtColor(input, input, inputType == IR ? CV_GRAY2RGB : CV_HSV2RGB);
         Window::print("Ratchet Rockers 1706", input, Point(IMAGE_WIDTH - 200, 15));
         sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
@@ -546,6 +490,14 @@ void targetDetection(Mat img, int)
         if (displayMode == WindowMode::APPROXPOLY) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
+        if (polygon.size() != 4) {
+            failedSides++;
+            continue;
+        }
+        if (!isContourConvex(polygon)) {
+            failedConvex++;
+            continue;
+        }
         Rect boundRect = boundingRect(polygon);
         rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
 
@@ -590,17 +542,15 @@ void targetDetection(Mat img, int)
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
             Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
 
-            assert(Real_Distance >= 0);
+            if (Plane_Distance < 5) {
+                continue;
+            }
 
             sprintf(str, "BRH:%d", boundRect.height);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance));
+            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance), Plane_Distance);
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2fm", inchesToMeters(Real_Distance));
-            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
             circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
             circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
             //contour is a tall and skinny one
@@ -615,7 +565,9 @@ void targetDetection(Mat img, int)
             double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance_Dynamic = Plane_Distance / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
 
-            assert(Real_Distance_Dynamic >= 0);
+            if (Plane_Distance_Dynamic < 5) {
+                continue;
+            }
 
             sprintf(str, "BRH:%d", boundRect.height);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
@@ -628,16 +580,15 @@ void targetDetection(Mat img, int)
             //contour is the short and wide, dynamic target
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
-//            drawContours(dst, contoursDrawWrapper,0, Scalar(255, 0, 0), 3, 8, hierarchy, 0, Point() );
         }
         if (displayMode == WindowMode::PASS) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
-        if (displayMode == WindowMode::CONTOURS || displayMode == WindowMode::APPROXPOLY || displayMode == WindowMode::PASS) {
-            WindowMode::print(displayMode, contoursImg);
-            Window::print("Ratchet Rockers 1706", contoursImg, Point(IMAGE_WIDTH - 200, 15));
-            imshow(windowName, contoursImg);
-        }
+    }
+    if (displayMode == WindowMode::CONTOURS || displayMode == WindowMode::APPROXPOLY || displayMode == WindowMode::PASS) {
+        WindowMode::print(displayMode, contoursImg);
+        Window::print("Ratchet Rockers 1706", contoursImg, Point(IMAGE_WIDTH - 200, 15));
+        imshow(windowName, contoursImg);
     }
     cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
             " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
@@ -675,7 +626,6 @@ void targetDetection(Mat img, int)
         //case left
         if (Static_Target.size() + Dynamic_Target.size() == 2) {
             targetCase = LEFT;
-            // TODO decrement each P value by 1
             R[0] = Plane_Distance_Dynamic;
             R[4] = Plane_Distance;
             P[0][4] = Mass_Center_Static[0].x;
@@ -847,6 +797,8 @@ void ballDetection(Mat img, int)
         case Thresh::VAL_MAX:
             curThreshVal = ballValMax;
             break;
+        default:
+            abort();
         }
         sprintf(str, "%s: %d", Thresh::str(currentThreshold).c_str(), curThreshVal);
         putText(thresh, str, Point(5, 30), CV_FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(255,0,255), 1, 8, false);

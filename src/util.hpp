@@ -116,6 +116,11 @@ namespace WindowMode {
 
 typedef bool (*ContourConstraint)(std::vector<cv::Point>);
 
+struct BallTest {
+    std::string name;
+    ContourConstraint check;
+};
+
 template<class T>
 T square ( T x )
 {
@@ -173,11 +178,11 @@ double inchesToMeters(const double inches)
  */
 const std::string passesTests(
         std::vector<cv::Point> &contour,
-        std::map<const std::string, ContourConstraint> &ballTests)
+        std::vector<BallTest> &ballTests)
 {
     for (auto &test : ballTests) {
-        if (!test.second(contour)) {
-            return test.first;
+        if (!test.check(contour)) {
+            return test.name;
         }
     }
     return "";
@@ -191,7 +196,7 @@ const std::string passesTests(
  */
 std::vector<std::vector<cv::Point> > getSuccessfulContours(
         std::vector<std::vector<cv::Point> > &contours,
-        std::map<const std::string, ContourConstraint> &ballTests)
+        std::vector<BallTest> &ballTests)
 {
     std::map<const std::string, int> failedTests;
     std::vector<std::vector<cv::Point> > succeededContours;
@@ -215,6 +220,66 @@ template<class List>
 cv::Point2d getMedianPoint(List &items, int start, int end)
 {
     items.push_back(start);
+}
+
+template<class ArrayOfPoints>
+void T2B_L2R(ArrayOfPoints pt)
+{
+    int temp_x;
+    int temp_y;
+
+    int i, swapped;
+
+    do {
+        swapped = 0;
+        for (i = 1; i < 4; i++)
+        {
+            if (pt[i-1].y > pt[i].y)
+            {
+                temp_x = pt[i-1].x;
+                temp_y = pt[i-1].y;
+                pt[i-1].x = pt[i].x;
+                pt[i-1].y = pt[i].y;
+                pt[i].x = temp_x;
+                pt[i].y = temp_y;
+                swapped = 1;
+            }
+        }
+    }
+    while (swapped == 1);
+
+    /// Make sure top two points are left to right
+    if (pt[0].x > pt[1].x)
+    {
+        temp_x = pt[0].x;
+        temp_y = pt[0].y;
+        pt[0].x = pt[1].x;
+        pt[0].y = pt[1].y;
+        pt[1].x = temp_x;
+        pt[1].y = temp_y;
+    }
+
+    /// Make sure bottom two points are left to right
+    if (pt[2].x > pt[3].x)
+    {
+        temp_x = pt[2].x;
+        temp_y = pt[2].y;
+        pt[2].x = pt[3].x;
+        pt[2].y = pt[3].y;
+        pt[3].x = temp_x;
+        pt[3].y = temp_y;
+    }
+}
+
+void applyText(std::vector<std::string> &text, cv::Point startPos, cv::Mat &img)
+{
+    int x = startPos.x;
+    int y = startPos.y;
+    std::vector<std::string>::const_iterator iterator;
+    for (iterator = text.begin(); iterator != text.end(); ++iterator) {
+        putText(img, (*iterator).c_str(), cv::Point(x, y), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, cv::Scalar(255,0,255),1,8,false);
+        y += 20;
+    }
 }
 
 #endif // UTIL_HPP

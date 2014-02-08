@@ -65,34 +65,6 @@ static double yMinus;
 
 std::ofstream ofs ("xyh.log", std::ofstream::out);
 
-int test()
-{
-
-    double TestR1, TestR2, TestR3, TestR4, TestR5, TestR6, TestR7, TestR8;
-    int P[3][8];
-    int i,j;
-
-
-    // Example:
-    TestR1=180;
-    TestR2=240;
-    TestR3=TestR4=TestR5=TestR6=TestR7=TestR8=0;
-    for (i=0; i<3; i++)
-       for (j=0; j<8; j++)
-           P[i][j]=-1;
-    P[0][1]=170;
-
-
-
-    double xpos, ypos, heading;
-    // This is what Hunter and Connor will call.  It will return xR and yR (inches) and Heading (degrees) as global variables.
-    FindXYH(TestR1, TestR2, TestR3, TestR4, TestR5, TestR6, TestR7, TestR8, P, xpos, ypos, heading);
-
-    return(0);
-}
-
-
-
 /*
  * This function finds global variables xR and yR and Heading of the robot.
  * Enter the ranges to the 4 hortizontal targets (R1 to R4) and to the 4 vertical targets (R5 to R8) in inches and
@@ -104,6 +76,9 @@ int test()
 */
 void FindXYH(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int P[3][8], double &xPos, double &yPos, double &heading)
 {
+    xR = 0.0;
+    yR = 0.0;
+    H = 0.0;
     FindXY(R1, R2, R3, R4, R5, R6, R7, R8);
     FindHeading(R1, R2, R3, R4, R5, R6, R7, R8, P);
     xPos = xR;
