@@ -22,6 +22,7 @@
 #define FOV_Y 79//degrees
 #define FOV_X 111.426 //degrees
 #define STATIC_TARGET_HEIGHT  32.25 //in
+#define DYNAMIC_TARGET_HEIGHT 4 //in
 
 // OpenCV Namespace
 using namespace cv;
@@ -71,15 +72,13 @@ uchar ballSatMin = color == RED ? 116 : 92;
 uchar ballSatMax = color == RED ? 255 : 202;
 uchar ballValMin = color == RED ? 100 : 0;
 uchar ballValMax = color == RED ? 255 : 158;
-const int ballSidesMin = 5; // for a circle
-const int ballMinArea = 250;
+const uint ballSidesMin = 5; // for a circle
+const uint ballMinArea = 250;
 
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
 int contourMinArea = 50;
-
-const float calibrationRange = 2.724; // meters
-const float calibrationPixels = 10; // pixels
+const float Tan_FOV_Y_Half = 1.46;
 
 const int kern_mat[] = {1,0,1,
                         0,1,0,
@@ -117,8 +116,8 @@ const int CHANGE_THRESH = 5;
 const int CHANGE_AREA = 20;
 const int CHANGE_ACCURACY = 1;
 const int CHANGE_DILATE = 1;
-const int CAMERA_COUNT = 3;
-const int TARGET_COUNT = 8;
+const uint CAMERA_COUNT = 3;
+const uint TARGET_COUNT = 8;
 
 const Point3d worldCoordsLeft[] = {
     {10.91666666666667, 10.01041666666667, 0},
@@ -212,10 +211,6 @@ int main()
         if (mode == CAMERA || mode == VIDEO) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
             // Grab a frame and contain it in the cv::Mat img
             camera >> img;
-            if (&img == NULL) {
-                cerr << "Video stream ended abruptly." << endl;
-                return -1;
-            }
         } else {
             img = inframe.clone();
         }
@@ -482,11 +477,6 @@ void targetDetection(Mat img, int)
 
     findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
 
-    double ratio;
-    double lengthTop;
-    double lengthBottom;
-    double lengthRight;
-    double lengthLeft;
     vector<string> statusText;
     int totalContours = contours.size();
     int failedArea = 0;
@@ -496,9 +486,7 @@ void targetDetection(Mat img, int)
     int failedSquare = 0;
     int failedVLarge = 0;
     int success = 0;
-    double Image_Heigh_in, Image_Heigh_in_Dynamic = 0;
-    double Plane_Distance, Plane_Distance_Dynamic = 0;
-    float Tan_FOV_Y_Half = 1.46;
+    double Image_Heigh_in = 0.0;
     Mat contoursImg = dst.clone().zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_64F);
     double R[8] = {0};
     int P[CAMERA_COUNT][TARGET_COUNT];
@@ -515,7 +503,6 @@ void targetDetection(Mat img, int)
     for( unsigned int i = 0; i < contours.size(); i++ )
     {
         vector<Point> contour = contours[i];
-        Vec4i contourHierarchy = hierarchy[i];
         // Very small contours (noise)
         if (contourArea(contour) < contourMinArea) {
             failedArea++;
@@ -539,10 +526,15 @@ void targetDetection(Mat img, int)
             continue;
         }
         Rect boundRect = boundingRect(polygon);
-        rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
+//        rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
+        RotatedRect minRect = minAreaRect( Mat(contour));
+        Point2f rect_points[4];
+        minRect.points(rect_points);
+        for (int j = 0; j < 4; j++)
+            line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 0),2, 8);
 
         // ratio helps determine orientation of rectangle (vertical / horizontal)
-        ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);
+        double ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);
         if (isAlmostSquare(ratio)) {
             failedSquare++;
             continue; // go to next contour
@@ -566,10 +558,10 @@ void targetDetection(Mat img, int)
         corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
         // test aspect ratio
-        lengthTop = distance(localCorners[0], localCorners[1]);
-        lengthBottom = distance(localCorners[2], localCorners[3]);
-        lengthLeft = distance(localCorners[0], localCorners[2]);
-        lengthRight = distance(localCorners[1], localCorners[3]);
+//        double lengthTop = distance(localCorners[0], localCorners[1]);
+//        double lengthBottom = distance(localCorners[2], localCorners[3]);
+//        double lengthLeft = distance(localCorners[0], localCorners[2]);
+//        double lengthRight = distance(localCorners[1], localCorners[3]);
         success++;
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
@@ -579,11 +571,11 @@ void targetDetection(Mat img, int)
 
         if (targetType == Target::STATIC) // static target
         {
-            double refinedHeight = distance(localCorners[0], localCorners[2]);
-            double flatHeight = localCorners[2].y - localCorners[0].y;
-            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
-            Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
+//            double refinedHeight = distance(localCorners[0], localCorners[2]);
+//            double flatHeight = localCorners[2].y - localCorners[0].y;
+            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
+            double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
             planeDistance = Plane_Distance;
@@ -605,11 +597,12 @@ void targetDetection(Mat img, int)
         }
         else
         {
+            if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
+            Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            Image_Heigh_in_Dynamic = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
-            Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance_Dynamic = Plane_Distance / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
+            double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
             planeDistance = Plane_Distance_Dynamic;
             realDistance = Real_Distance_Dynamic;
 
@@ -631,7 +624,7 @@ void targetDetection(Mat img, int)
         }
         Moments moment = moments(contour, false);
         Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
-        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center};
+        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect};
         targets.push_back(target);
         if (targetType == Target::STATIC) {
             staticTargets.push_back(target);
@@ -682,6 +675,15 @@ void targetDetection(Mat img, int)
     }
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+    // Get vectors for world->camera transform
+//    solvePnP (world_coords, pixel_coords, cameraMatrix, distortion, rvec, tvec);
+
+    // We need inverse of the world->camera transform (camera->world) to calculate
+    // the camera's location
+    //    Rodrigues (rvec, rotation_matrix);
+    //    Rodrigues (rotation_matrix.t (), camera_rotation_vector);
+    //    Mat t = tvec.t ();
+    //    camera_translation_vector = -camera_rotation_vector * t;
 
     string caseStr;
     switch (targetCase) {

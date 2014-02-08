@@ -48,6 +48,7 @@ namespace Target {
         cv::Point2f massCenter;
         cv::Point2i rectCenter;
         cv::Rect boundRect;
+        cv::RotatedRect areaRect;
     };
 }
 
@@ -80,6 +81,8 @@ namespace Thresh {
             return "Minimum IR";
         case IR_MAX:
             return "Maximum IR";
+        default:
+            throw;
         }
     }
 }
@@ -122,6 +125,8 @@ namespace WindowMode {
             return "Passed Tests";
         case FINAL:
             return "Final";
+        default:
+            throw;
         }
     }
     void print(WindowMode mode, cv::Mat &output) {
@@ -236,7 +241,7 @@ std::vector<std::vector<cv::Point> > getSuccessfulContours(
 template<class List>
 cv::Point2d getMedianPoint(List &items, int start, int end)
 {
-    items.push_back(start);
+    throw;
 }
 
 template<class ArrayOfPoints>
