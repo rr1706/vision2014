@@ -34,6 +34,23 @@ enum TeamColor {
     BLUE = 1
 };
 
+namespace Target {
+    enum Type {
+        STATIC,
+        DYNAMIC
+    };
+
+    struct Target {
+        Type type;
+        double realDistance;
+        double planeDistance;
+        cv::Moments moment;
+        cv::Point2f massCenter;
+        cv::Point2i rectCenter;
+        cv::Rect boundRect;
+    };
+}
+
 namespace Thresh {
     enum Part {
         HUE_MIN = 0,
@@ -279,6 +296,29 @@ void applyText(std::vector<std::string> &text, cv::Point startPos, cv::Mat &img)
     for (iterator = text.begin(); iterator != text.end(); ++iterator) {
         putText(img, (*iterator).c_str(), cv::Point(x, y), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, cv::Scalar(255,0,255),1,8,false);
         y += 20;
+    }
+}
+
+/**
+  * Sort the targets left to right.
+  */
+void sortTargets(std::vector<Target::Target> &targets)
+{
+    if (targets.size() <= 1) return;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (uint i = 0; i < targets.size(); i++) {
+            Target::Target target = targets[i];
+            if (i + 1 != targets.size()) {
+                Target::Target nextTarget = targets[i + 1];
+                if (target.massCenter.x > nextTarget.massCenter.x) {
+                    targets[i + 1] = target;
+                    targets[i] = nextTarget;
+                    changed = true; // if change was made reloop again
+                }
+            }
+        }
     }
 }
 

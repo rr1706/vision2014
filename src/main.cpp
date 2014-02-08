@@ -37,7 +37,7 @@ const char KEY_SPEED = ' ';
 
 // config
 const InputSource mode = CAMERA;
-const int cameraId = 2;
+const int cameraId = 1;
 const ColorSystem inputType = IR;
 const TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
@@ -75,7 +75,7 @@ const int ballSidesMin = 5; // for a circle
 const int ballMinArea = 250;
 
 // for approxpolydp
-int accuracy = 6; //maximum distance between the original curve and its approximation
+int accuracy = 2; //maximum distance between the original curve and its approximation
 int contourMinArea = 50;
 
 const float calibrationRange = 2.724; // meters
@@ -120,6 +120,47 @@ const int CHANGE_DILATE = 1;
 const int CAMERA_COUNT = 3;
 const int TARGET_COUNT = 8;
 
+const Point3d worldCoordsLeft[] = {
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0},
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0}
+};
+
+const Point3d worldCoordsRight[] = {
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0},
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0}
+};
+
+const Point3d worldCoordsBoth[] = {
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0},
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0},
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0},
+    {10.91666666666667, 10.01041666666667, 0},
+    {10.91666666666667, 8.34375, 0},
+    {16.08333333333334, 8.34375, 0},
+    {16.08333333333334, 10.01041666666667, 0}
+};
+
 void targetDetection(Mat img, int id);
 
 void ballDetection(Mat img, int id);
@@ -158,8 +199,6 @@ int main()
     }
     if (displayMode != WindowMode::NONE) {
         namedWindow(windowName, CV_WINDOW_NORMAL);
-        moveWindow(windowName, 840, 0);
-        resizeWindow(windowName, 640, 480);
     }
     if (mkdir(dirname, 0755) == -1) {
         strcpy(dirname, ".");
@@ -470,6 +509,7 @@ void targetDetection(Mat img, int)
     }
     vector<Point2d> pixel_coords;
     vector<Point3d> world_coords;
+    vector<Target::Target> targets, staticTargets, dynamicTargets;
 
     // Create a for loop to go through each contour (i) one at a time
     for( unsigned int i = 0; i < contours.size(); i++ )
@@ -486,11 +526,11 @@ void targetDetection(Mat img, int)
         }
         vector<Point> polygon;
         approxPolyDP( contour, polygon, accuracy, true );
-        vector<vector<Point>> contoursDrawWrapper {polygon};
+        vector<vector<Point> > contoursDrawWrapper {polygon};
         if (displayMode == WindowMode::APPROXPOLY) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
-        if (polygon.size() != 4) {
+        if (false && polygon.size() != 4) {
             failedSides++;
             continue;
         }
@@ -534,14 +574,20 @@ void targetDetection(Mat img, int)
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
+        Target::Type targetType = (boundRect.height > boundRect.width * 2) ? Target::STATIC : Target::DYNAMIC;
+        double planeDistance, realDistance;
 
-        if (boundRect.height > boundRect.width * 2) // static target
+        if (targetType == Target::STATIC) // static target
         {
             double refinedHeight = distance(localCorners[0], localCorners[2]);
             double flatHeight = localCorners[2].y - localCorners[0].y;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
             Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+            planeDistance = Plane_Distance;
+            realDistance = Real_Distance;
 
             if (Plane_Distance < 5) {
                 continue;
@@ -564,6 +610,8 @@ void targetDetection(Mat img, int)
             Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance_Dynamic = Plane_Distance / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
+            planeDistance = Plane_Distance_Dynamic;
+            realDistance = Real_Distance_Dynamic;
 
             if (Plane_Distance_Dynamic < 5) {
                 continue;
@@ -581,6 +629,15 @@ void targetDetection(Mat img, int)
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
         }
+        Moments moment = moments(contour, false);
+        Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
+        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center};
+        targets.push_back(target);
+        if (targetType == Target::STATIC) {
+            staticTargets.push_back(target);
+        } else {
+            dynamicTargets.push_back(target);
+        }
         if (displayMode == WindowMode::PASS) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
@@ -592,120 +649,36 @@ void targetDetection(Mat img, int)
     }
     cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
             " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
-
-    /// calculate center
-    vector<Moments> Moment_Center_Static(Static_Target.size() );
-    for( unsigned int i = 0; i < Static_Target.size(); i++ )
-    {
-        Moment_Center_Static[i] = moments( Static_Target[i], false );
-    }
-
-    ///  Get the mass centers:
-    vector<Point2f> Mass_Center_Static( Static_Target.size() );
-    for( unsigned int i = 0; i < Static_Target.size(); i++ )
-    {
-        Mass_Center_Static[i] = Point2f( Moment_Center_Static[i].m10/Moment_Center_Static[i].m00 , Moment_Center_Static[i].m01/Moment_Center_Static[i].m00 );
-    }
-
-    /// calculate center
-    vector<Moments> Moment_Center_Dynamic(Dynamic_Target.size() );
-    for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
-    {
-        Moment_Center_Dynamic[i] = moments( Dynamic_Target[i], false );
-    }
-
-    ///  Get the mass centers:
-    vector<Point2f> Mass_Center_Dynamic( Dynamic_Target.size() );
-    for( unsigned int i = 0; i < Dynamic_Target.size(); i++ )
-    {
-        Mass_Center_Dynamic[i] = Point2f( Moment_Center_Dynamic[i].m10/Moment_Center_Dynamic[i].m00 , Moment_Center_Dynamic[i].m01/Moment_Center_Dynamic[i].m00 );
-    }
+    sortTargets(targets);
+    sortTargets(dynamicTargets);
+    sortTargets(staticTargets);
     TargetCase targetCase = NONE;
-    if(Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0
-            && Mass_Center_Static[0].x > Mass_Center_Dynamic[0].x) {
+    if (dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2
+            && staticTargets[0].massCenter.x > dynamicTargets[0].massCenter.x) {
         //case left
-        if (Static_Target.size() + Dynamic_Target.size() == 2) {
-            targetCase = LEFT;
-            R[0] = Plane_Distance_Dynamic;
-            R[4] = Plane_Distance;
-            P[0][4] = Mass_Center_Static[0].x;
-            P[0][0] = Mass_Center_Dynamic[0].x;
-
-            // Coordinates of rectangle in camera
-            pixel_coords.push_back (Point2d (284, 204));
-            pixel_coords.push_back (Point2d (286, 249));
-            pixel_coords.push_back (Point2d (421, 259));
-            pixel_coords.push_back (Point2d (416, 216));
-            pixel_coords.push_back (Point2d (284, 204));
-            pixel_coords.push_back (Point2d (286, 249));
-            pixel_coords.push_back (Point2d (421, 259));
-            pixel_coords.push_back (Point2d (416, 216));
-
-            // TODO make constant
-            // Target rectangle coordinates in feet
-            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
-
-        }
-    } else if (Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0) {
+        targetCase = LEFT;
+        R[0] = dynamicTargets[0].realDistance;
+        R[4] = staticTargets[0].realDistance;
+        P[0][4] = staticTargets[0].massCenter.x;
+        P[0][0] = dynamicTargets[0].massCenter.x;
+    } else if (dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2) {
         //case right
-        if (Static_Target.size() + Dynamic_Target.size() == 2) {
-            targetCase = RIGHT;
-
-            R[4] = Plane_Distance_Dynamic;
-            R[0] = Plane_Distance;
-            P[0][4] = Mass_Center_Static[0].x;
-            P[0][0]= Mass_Center_Dynamic[0].x;
-
-            // Coordinates of rectangle in camera
-            pixel_coords.push_back (Point2d (284, 204));
-            pixel_coords.push_back (Point2d (286, 249));
-            pixel_coords.push_back (Point2d (421, 259));
-            pixel_coords.push_back (Point2d (416, 216));
-            pixel_coords.push_back (Point2d (284, 204));
-            pixel_coords.push_back (Point2d (286, 249));
-            pixel_coords.push_back (Point2d (421, 259));
-            pixel_coords.push_back (Point2d (416, 216));
-
-            // Target rectangle coordinates in feet
-            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
-        }
+        targetCase = RIGHT;
+        R[4] = dynamicTargets[0].realDistance;
+        R[0] = staticTargets[0].realDistance;
+        P[0][4] = staticTargets[0].massCenter.x;
+        P[0][0] = dynamicTargets[0].massCenter.x;
     }
-    if (Static_Target.size() + Dynamic_Target.size() == 4) {
+    if (staticTargets.size() >= 2 && dynamicTargets.size() >= 2) {
         targetCase = ALL;
-
-        // Coordinates of rectangle in camera
-        pixel_coords.push_back (Point2d (284, 204));
-        pixel_coords.push_back (Point2d (286, 249));
-        pixel_coords.push_back (Point2d (421, 259));
-        pixel_coords.push_back (Point2d (416, 216));
-        pixel_coords.push_back (Point2d (284, 204));
-        pixel_coords.push_back (Point2d (286, 249));
-        pixel_coords.push_back (Point2d (421, 259));
-        pixel_coords.push_back (Point2d (416, 216));
-
-        // Target rectangle coordinates in feet
-        world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-        world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-        world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-        world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
-        world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
-        world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
-        world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
-        world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
+        R[0] = staticTargets[0].realDistance;
+        R[4] = dynamicTargets[0].realDistance;
+        R[5] = staticTargets[1].realDistance;
+        R[1] = dynamicTargets[1].realDistance;
+        P[0][0] = staticTargets[0].massCenter.x;
+        P[0][4] = dynamicTargets[0].massCenter.x;
+        P[0][5] = staticTargets[1].massCenter.x;
+        P[0][1] = dynamicTargets[1].massCenter.x;
     }
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
