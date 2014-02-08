@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <cerrno>
 
 SolutionLog::SolutionLog() : writes(0)
 {
@@ -20,6 +21,8 @@ bool SolutionLog::open(std::string file, std::vector<std::string> columns)
             this->file << column << ",";
         }
         this->file << std::endl;
+    } else {
+        perror("Failed to open solution log");
     }
     this->columns = columns;
     return this->file.is_open();

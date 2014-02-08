@@ -34,6 +34,86 @@ enum TeamColor {
     BLUE = 1
 };
 
+namespace Thresh {
+    enum Part {
+        HUE_MIN = 0,
+        HUE_MAX = 1,
+        SAT_MIN = 2,
+        SAT_MAX = 3,
+        VAL_MIN = 4,
+        VAL_MAX = 5,
+        IR_MIN = 6,
+        IR_MAX = 7
+    };
+    std::string str(Part part) {
+        switch (part) {
+        case HUE_MIN:
+            return "Minimum Hue";
+        case HUE_MAX:
+            return "Maximum Hue";
+        case SAT_MIN:
+            return "Minimum Saturation";
+        case SAT_MAX:
+            return "Maximum Saturation";
+        case VAL_MIN:
+            return "Minimum Value";
+        case VAL_MAX:
+            return "Maximum Value";
+        case IR_MIN:
+            return "Minimum IR";
+        case IR_MAX:
+            return "Maximum IR";
+        }
+    }
+}
+
+namespace Window {
+    void print(std::string str, cv::Mat &output, cv::Point pos = cv::Point(5, 15), float size = 1.0) {
+        putText(output, str, pos, CV_FONT_HERSHEY_PLAIN, size, cv::Scalar(255,0,255), 1, 8, false);
+    }
+}
+
+namespace WindowMode {
+    enum WindowMode {
+        NONE = -1,
+        RAW = 1,
+        THRESHOLD = 2,
+        ERODE = 3,
+        DILATE = 4,
+        CONTOURS = 5,
+        APPROXPOLY = 6,
+        PASS = 7,
+        FINAL = 0
+    };
+    std::string str(WindowMode mode) {
+        switch (mode) {
+        case NONE:
+            return "None";
+        case RAW:
+            return "Raw";
+        case THRESHOLD:
+            return "Threshold";
+        case ERODE:
+            return "Erode";
+        case DILATE:
+            return "Dilate";
+        case CONTOURS:
+            return "Contours";
+        case APPROXPOLY:
+            return "ApproxPoly";
+        case PASS:
+            return "Passed Tests";
+        case FINAL:
+            return "Final";
+        }
+    }
+    void print(WindowMode mode, cv::Mat &output) {
+        char out[255];
+        sprintf(out, "%d - %s", mode, str(mode).c_str());
+        Window::print(std::string(out), output, cv::Point(5, 15));
+    }
+}
+
 typedef bool (*ContourConstraint)(std::vector<cv::Point>);
 
 template<class T>
