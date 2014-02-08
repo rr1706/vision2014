@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include "util.hpp"
 #include "solutionlog.hpp"
+#include "xyh.hpp"
 
 #define FOV_Y 79//degrees
 #define FOV_X 111.426 //degrees
@@ -107,6 +108,8 @@ const int CHANGE_THRESH = 5;
 const int CHANGE_AREA = 20;
 const int CHANGE_ACCURACY = 1;
 const int CHANGE_DILATE = 1;
+const int CAMERA_COUNT = 3;
+const int TARGET_COUNT = 8;
 
 template<class ArrayOfPoints>
 void T2B_L2R(ArrayOfPoints pt)
@@ -510,10 +513,19 @@ void targetDetection(Mat img, int)
     int failedSquare = 0;
     int failedVLarge = 0;
     int success = 0;
-    double Image_Heigh_in = 0;
-    double Plane_Distance = 0;
+    double Image_Heigh_in, Image_Heigh_in_Dynamic = 0;
+    double Plane_Distance, Plane_Distance_Dynamic = 0;
     float Tan_FOV_Y_Half = 1.46;
     Mat contoursImg = dst.clone().zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_64F);
+    double R[8] = {0};
+    int P[CAMERA_COUNT][TARGET_COUNT];
+    for (uint pi = 0; pi < CAMERA_COUNT; pi++) {
+        for (uint pj = 0; pj < TARGET_COUNT; pj++) {
+            P[pi][pj] = -1;
+        }
+    }
+    vector<Point2d> pixel_coords;
+    vector<Point3d> world_coords;
 
     // Create a for loop to go through each contour (i) one at a time
     for( unsigned int i = 0; i < contours.size(); i++ )
@@ -597,6 +609,22 @@ void targetDetection(Mat img, int)
         }
         else
         {
+            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
+            Image_Heigh_in_Dynamic = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
+            Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double Real_Distance_Dynamic = Plane_Distance / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
+
+            assert(Real_Distance_Dynamic >= 0);
+
+            sprintf(str, "BRH:%d", boundRect.height);
+            putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Dynamic));
+            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+
+            circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
+            circle(dst, localCorners[2], 5, Scalar(255, 255, 0), 2, 8, 0);
+
             //contour is the short and wide, dynamic target
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
@@ -647,16 +675,90 @@ void targetDetection(Mat img, int)
         //case left
         if (Static_Target.size() + Dynamic_Target.size() == 2) {
             targetCase = LEFT;
+            // TODO decrement each P value by 1
+            R[0] = Plane_Distance_Dynamic;
+            R[4] = Plane_Distance;
+            P[0][4] = Mass_Center_Static[0].x;
+            P[0][0] = Mass_Center_Dynamic[0].x;
+
+            // Coordinates of rectangle in camera
+            pixel_coords.push_back (Point2d (284, 204));
+            pixel_coords.push_back (Point2d (286, 249));
+            pixel_coords.push_back (Point2d (421, 259));
+            pixel_coords.push_back (Point2d (416, 216));
+            pixel_coords.push_back (Point2d (284, 204));
+            pixel_coords.push_back (Point2d (286, 249));
+            pixel_coords.push_back (Point2d (421, 259));
+            pixel_coords.push_back (Point2d (416, 216));
+
+            // TODO make constant
+            // Target rectangle coordinates in feet
+            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
+
         }
-    } else {
+    } else if (Mass_Center_Static.size() > 0 && Mass_Center_Dynamic.size() > 0) {
         //case right
         if (Static_Target.size() + Dynamic_Target.size() == 2) {
             targetCase = RIGHT;
+
+            R[4] = Plane_Distance_Dynamic;
+            R[0] = Plane_Distance;
+            P[0][4] = Mass_Center_Static[0].x;
+            P[0][0]= Mass_Center_Dynamic[0].x;
+
+            // Coordinates of rectangle in camera
+            pixel_coords.push_back (Point2d (284, 204));
+            pixel_coords.push_back (Point2d (286, 249));
+            pixel_coords.push_back (Point2d (421, 259));
+            pixel_coords.push_back (Point2d (416, 216));
+            pixel_coords.push_back (Point2d (284, 204));
+            pixel_coords.push_back (Point2d (286, 249));
+            pixel_coords.push_back (Point2d (421, 259));
+            pixel_coords.push_back (Point2d (416, 216));
+
+            // Target rectangle coordinates in feet
+            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+            world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+            world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
         }
     }
     if (Static_Target.size() + Dynamic_Target.size() == 4) {
         targetCase = ALL;
+
+        // Coordinates of rectangle in camera
+        pixel_coords.push_back (Point2d (284, 204));
+        pixel_coords.push_back (Point2d (286, 249));
+        pixel_coords.push_back (Point2d (421, 259));
+        pixel_coords.push_back (Point2d (416, 216));
+        pixel_coords.push_back (Point2d (284, 204));
+        pixel_coords.push_back (Point2d (286, 249));
+        pixel_coords.push_back (Point2d (421, 259));
+        pixel_coords.push_back (Point2d (416, 216));
+
+        // Target rectangle coordinates in feet
+        world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+        world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+        world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+        world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
+        world_coords.push_back (Point3d (10.91666666666667, 10.01041666666667, 0));
+        world_coords.push_back (Point3d (10.91666666666667, 8.34375, 0));
+        world_coords.push_back (Point3d (16.08333333333334, 8.34375, 0));
+        world_coords.push_back (Point3d (16.08333333333334, 10.01041666666667, 0));
     }
+    double xPos, yPos, heading;
+    FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
 
     string caseStr;
     switch (targetCase) {
@@ -680,6 +782,8 @@ void targetDetection(Mat img, int)
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
+    sprintf(str, "Heading %f xR %f yR %f", heading, xPos, yPos);
+    putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     applyText(statusText, Point(5, 90), dst);
     //draw crosshairs
     line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);

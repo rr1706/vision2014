@@ -4,3 +4,5 @@ Debug/
 Depth
 Makefile
 *.user*
+xyh.log
+!test/Makefile
