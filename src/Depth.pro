@@ -17,11 +17,12 @@ CONFIG   -= app_bundle
 TEMPLATE = app
 
 SOURCES += \
-    main.cpp \
     solutionlog.cpp \
-    xyh.cpp
+    xyh.cpp \
+    util.cpp \
+    main.cpp
 
-LIBS += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_calib3d
+LIBS += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_calib3d -lopencv_stitching
 QMAKE_CXXFLAGS += -std=c++0x
 
 HEADERS += \
