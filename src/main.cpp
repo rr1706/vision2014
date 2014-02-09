@@ -551,18 +551,23 @@ void targetDetection(Mat img, int)
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
-            //double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+            double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
 
             sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Combined));
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
 
             for (int j = 0; j < 4; j++)
                 line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 255),2, 8);
-
-            if (false) {
-                // TODO also check if the contour is 6 points L
-
-            } else
+            Moments moment = moments(contour, false);
+            Point2i fakeDynamicCenter = boundRect.tl() + Point2i(boundRect.width / 2, 0);
+            Point2i fakeStaticCenter = boundRect.tl() + Point2i(0, boundRect.height / 2);
+            // lie about the values a little bit
+            Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect};
+            Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect};
+            targets.push_back(fakeDynamic);
+            targets.push_back(fakeStatic);
+            staticTargets.push_back(fakeStatic);
+            dynamicTargets.push_back(fakeDynamic);
             continue;
         }
         if (false && polygon.size() != 4) {
