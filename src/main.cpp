@@ -10,6 +10,8 @@
 #include <map>
 #include <vector>
 #include <deque>
+#include <thread>
+#include <atomic>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <QtNetwork>
@@ -37,6 +39,7 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
+const ProcessingMode procMode = DEMO;
 const InputSource mode = CAMERA;
 const int cameraId = 1;
 const ColorSystem inputType = IR;
@@ -51,7 +54,6 @@ const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
 
 // Values for threshold IR
-
 int gray_min = 245;
 int gray_max = 255;
 
@@ -66,8 +68,6 @@ const int value_max = 255;
 // Values for threshold ball track
 uchar ballHueMin = color == RED ? 115 : 31;
 uchar ballHueMax = color == RED ? 150 : 128;
-//const uchar ballHueMinUpper = color == RED ? 150 : 31;
-//const uchar ballHueMaxUpper = color == RED ? 255 : 128;
 uchar ballSatMin = color == RED ? 116 : 92;
 uchar ballSatMax = color == RED ? 255 : 202;
 uchar ballValMin = color == RED ? 100 : 0;
@@ -101,8 +101,6 @@ vector<BallTest> ballTests = {
 auto startTime = std::chrono::high_resolution_clock::now();
 auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
-int IMAGE_WIDTH = 0;
-int IMAGE_HEIGHT = 0;
 int imageWriteIndex = 0;
 int dilations = 1;
 WindowMode::WindowMode displayMode = WindowMode::FINAL;
@@ -116,8 +114,9 @@ const int CHANGE_THRESH = 5;
 const int CHANGE_AREA = 20;
 const int CHANGE_ACCURACY = 1;
 const int CHANGE_DILATE = 1;
-const uint CAMERA_COUNT = 3;
-const uint TARGET_COUNT = 8;
+
+const int CAMERA_COUNT = 3;
+const int TARGET_COUNT = 8;
 
 const Point3d worldCoordsLeft[] = {
     {10.91666666666667, 10.01041666666667, 0},
@@ -160,41 +159,54 @@ const Point3d worldCoordsBoth[] = {
     {16.08333333333334, 10.01041666666667, 0}
 };
 
-void targetDetection(Mat img, int id);
+struct ThreadData {
+    VideoCapture camera;
+    Mat image;
+    vector<Target::Target> targets;
+    TargetCase pairCase;
+    std::chrono::high_resolution_clock::time_point start;
+    std::chrono::high_resolution_clock::time_point lastImageWrite;
+    int imageWriteIndex = 0;
+    int id = 0;
+};
 
-void ballDetection(Mat img, int id);
+int demo();
+int sa();
+void targetDetection(ThreadData &data);
+void ballDetection(ThreadData &data);
 
 int main()
 {
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     strftime(dirname,50,"%Y%m%d_%H%M%S",timeinfo);
-    VideoCapture camera;
+    return procMode == SA ? sa() : demo();
+}
+
+int demo()
+{
+    ThreadData data;
     if (mode == CAMERA) {
-        camera = VideoCapture(cameraId);
-        if (!camera.isOpened()) {
+        data.camera = VideoCapture(cameraId);
+        if (!data.camera.isOpened()) {
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-        camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-        camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+//        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+//        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
-        camera = VideoCapture(videoPath);
-        if (!camera.isOpened()) {
+        data.camera = VideoCapture(videoPath);
+        if (!data.camera.isOpened()) {
             cerr << "Failed to open video path:" << videoPath << endl;
             return -1;
         }
     }
-    IMAGE_HEIGHT =  camera.get(CV_CAP_PROP_FRAME_HEIGHT);
-    IMAGE_WIDTH = camera.get(CV_CAP_PROP_FRAME_WIDTH);
     int currentSave = 0;
 
     Mat img, inframe;
 
     if (mode == IMAGE) {
         inframe = imread("raw_img_0.png");
-        IMAGE_HEIGHT = inframe.rows;
-        IMAGE_WIDTH = inframe.cols;
     }
     if (displayMode != WindowMode::NONE) {
         namedWindow(windowName, CV_WINDOW_NORMAL);
@@ -210,7 +222,7 @@ int main()
 
         if (mode == CAMERA || mode == VIDEO) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
             // Grab a frame and contain it in the cv::Mat img
-            camera >> img;
+            data.camera >> img;
         } else {
             img = inframe.clone();
         }
@@ -227,7 +239,7 @@ int main()
             break;
         case KEY_SPEED:
             for (int gi = 0; gi < 20; gi++) {
-                camera >> img;
+                data.camera >> img;
             }
             break;
         case 'p':
@@ -356,12 +368,13 @@ int main()
             imageWriteIndex++;
             lastImageWrite = start;
         }
+        data.image = img;
         switch (tracking) {
         case BALL:
-            ballDetection(img, 0);
+            ballDetection(data);
             break;
         case TARGET:
-            targetDetection(img, 0);
+            targetDetection(data);
             break;
         }
         // Note: img is dirty after running these functions
@@ -376,8 +389,6 @@ int main()
                 stringstream filename;
                 filename << "raw_img_" << k << ".png";
                 inframe = imread(filename.str());
-                IMAGE_HEIGHT = inframe.rows;
-                IMAGE_WIDTH = inframe.cols;
                 continue;
             } else {
                 break;
@@ -390,8 +401,55 @@ int main()
     return 0;
 }
 
-void targetDetection(Mat img, int)
+void runThread(ThreadData data) {
+    data.camera >> data.image;
+    double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(data.start-data.lastImageWrite).count();
+    if (saveImages && timeSinceWrite > imageInterval) {
+        sprintf(str, "%s/cam_%d/raw_img_%d.png", dirname, data.id, data.imageWriteIndex);
+        imwrite(str, data.image);
+        data.imageWriteIndex++;
+        data.lastImageWrite = data.start;
+    }
+    targetDetection(data);
+}
+
+int sa()
 {
+    ThreadData threadData[CAMERA_COUNT];
+    for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+        sprintf(str, "%s/cam_%d", dirname, i);
+        if (mkdir(str, 0755) == -1) {
+            cerr << "Failed to create directory for camera: " << str << endl;
+            return 1;
+        }
+        threadData[i].camera.open(i);
+    }
+    thread threads[CAMERA_COUNT];
+    while (true) {
+        auto start = std::chrono::high_resolution_clock::now();
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            threadData[i].start = start;
+            threads[i] = thread(runThread, threadData[i]);
+        }
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            if (threads[i].joinable())
+                threads[i].join();
+        }
+        auto finish = std::chrono::high_resolution_clock::now();
+        double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
+        cout << "Processed all image code in " << seconds << " seconds." << endl;
+        switch (char key = waitKey(30)) {
+        case 27:
+            return key - 27;
+        }
+    }
+    return 0;
+}
+
+void targetDetection(ThreadData &data)
+{
+    Mat img = data.image;
+    int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
     // Store the original image img to the Mat dst
     Mat dst = img.clone();
 
@@ -460,7 +518,6 @@ void targetDetection(Mat img, int)
     morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
     if (displayMode == WindowMode::DILATE) {
         Mat dilate = img.clone();
-//        cvtColor(img, img, inputType == IR ? )
         Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
         sprintf(str, "%d - Dilate", displayMode);
         putText(dilate, str, Point(5,15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255,0,255),1,8,false);
@@ -487,7 +544,7 @@ void targetDetection(Mat img, int)
     int failedVLarge = 0;
     int success = 0;
     double Image_Heigh_in = 0.0;
-    Mat contoursImg = dst.clone().zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_64F);
+    Mat contoursImg = Mat::zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8U);
     double R[8] = {0};
     int P[CAMERA_COUNT][TARGET_COUNT];
     for (uint pi = 0; pi < CAMERA_COUNT; pi++) {
@@ -703,7 +760,7 @@ void targetDetection(Mat img, int)
 
     sprintf(str, "Case = %s", caseStr.c_str());
     putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Targets S:%ld D:%ld", Static_Target.size(), Dynamic_Target.size());
+    sprintf(str, "Targets S:%u D:%u", Static_Target.size(), Dynamic_Target.size());
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
@@ -729,8 +786,10 @@ deque<Point2d> lastBallPositions;
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
 SolutionLog ballPositions;
 int ballFrameCount = 0;
-void ballDetection(Mat img, int)
+void ballDetection(ThreadData &data)
 {
+    Mat img = data.image;
+    int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
     if (!ballPositions.isOpen()) {
         sprintf(str, "%s/balltrack.csv", dirname);
         ballPositions.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
