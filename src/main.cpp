@@ -26,6 +26,7 @@
 #define FOV_X 111.426 //degrees
 #define STATIC_TARGET_HEIGHT  32.25 //in
 #define DYNAMIC_TARGET_HEIGHT 4 //in
+#define COMBINED_TARGET_HEIGHT 35.3 //in
 
 // OpenCV Namespace
 using namespace cv;
@@ -640,12 +641,60 @@ void targetDetection(ThreadData &data)
         if (displayMode == WindowMode::APPROXPOLY) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
-        if (false && polygon.size() != 4) {
-            failedSides++;
-            continue;
-        }
         if (!isContourConvex(polygon)) {
             failedConvex++;
+            RotatedRect minRect = minAreaRect(contour);
+            Point2f rect_points[4];
+            minRect.points(rect_points);
+            double width = distance(rect_points[2], rect_points[3]);
+            double height = distance(rect_points[2], rect_points[1]);
+            double ratio = width / height;
+            double areaRect = width * height;
+            double areaContour = contourArea(contour);
+            double deadSpace = areaContour / areaRect;
+            if (ratio > 0.7 && ratio < 1.7) continue;
+            if (deadSpace > 0.3) continue;
+            Rect boundRect = boundingRect(contour);
+            rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
+//            Moments theMoment = moments(contour, false);
+            sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
+            Window::print(string(str), dst, rect_points[2]);
+            sprintf(str, "H:%.2f HBR:%d", height, boundRect.height);
+            Window::print(string(str), dst, rect_points[1]);
+            sprintf(str, "W:%f R:%f", width, ratio);
+            Window::print(string(str), dst, rect_points[3]);
+
+            int centerX = boundRect.x + boundRect.width / 2;
+            int centerY = boundRect.y + boundRect.height / 2;
+            Point2i center = {centerX, centerY};
+
+            Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
+//            double refinedHeight = distance(localCorners[0], localCorners[2]);
+//            double flatHeight = localCorners[2].y - localCorners[0].y;
+            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
+            double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
+
+            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Combined));
+            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+
+            for (int j = 0; j < 4; j++)
+                line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 255),2, 8);
+            Moments moment = moments(contour, false);
+            Point2i fakeDynamicCenter = boundRect.tl() + Point2i(boundRect.width / 2, 0);
+            Point2i fakeStaticCenter = boundRect.tl() + Point2i(0, boundRect.height / 2);
+            // lie about the values a little bit
+            Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect};
+            Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect};
+            targets.push_back(fakeDynamic);
+            targets.push_back(fakeStatic);
+            staticTargets.push_back(fakeStatic);
+            dynamicTargets.push_back(fakeDynamic);
+            continue;
+        }
+        if (false && polygon.size() != 4) {
+            failedSides++;
             continue;
         }
         Rect boundRect = boundingRect(polygon);
