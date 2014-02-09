@@ -23,6 +23,7 @@
 #define FOV_X 111.426 //degrees
 #define STATIC_TARGET_HEIGHT  32.25 //in
 #define DYNAMIC_TARGET_HEIGHT 4 //in
+#define COMBINED_TARGET_HEIGHT 35.3 //in
 
 // OpenCV Namespace
 using namespace cv;
@@ -37,8 +38,8 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const InputSource mode = CAMERA;
-const int cameraId = 1;
+const InputSource mode = IMAGE;
+const int cameraId = 3;
 const ColorSystem inputType = IR;
 const TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
@@ -517,12 +518,55 @@ void targetDetection(Mat img, int)
         if (displayMode == WindowMode::APPROXPOLY) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
         }
-        if (false && polygon.size() != 4) {
-            failedSides++;
-            continue;
-        }
         if (!isContourConvex(polygon)) {
             failedConvex++;
+            RotatedRect minRect = minAreaRect(contour);
+            Point2f rect_points[4];
+            minRect.points(rect_points);
+            double width = distance(rect_points[2], rect_points[3]);
+            double height = distance(rect_points[2], rect_points[1]);
+            double ratio = width / height;
+            double areaRect = width * height;
+            double areaContour = contourArea(contour);
+            double deadSpace = areaContour / areaRect;
+            if (ratio > 0.7 && ratio < 1.7) continue;
+            if (deadSpace > 0.3) continue;
+            Rect boundRect = boundingRect(contour);
+            rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
+//            Moments theMoment = moments(contour, false);
+            sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
+            Window::print(string(str), dst, rect_points[2]);
+            sprintf(str, "H:%.2f HBR:%d", height, boundRect.height);
+            Window::print(string(str), dst, rect_points[1]);
+            sprintf(str, "W:%f R:%f", width, ratio);
+            Window::print(string(str), dst, rect_points[3]);
+
+            int centerX = boundRect.x + boundRect.width / 2;
+            int centerY = boundRect.y + boundRect.height / 2;
+            Point2i center = {centerX, centerY};
+
+            Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
+//            double refinedHeight = distance(localCorners[0], localCorners[2]);
+//            double flatHeight = localCorners[2].y - localCorners[0].y;
+            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
+            double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            //double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+
+            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Combined));
+            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+
+            for (int j = 0; j < 4; j++)
+                line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 255),2, 8);
+
+            if (false) {
+                // TODO also check if the contour is 6 points L
+
+            } else
+            continue;
+        }
+        if (false && polygon.size() != 4) {
+            failedSides++;
             continue;
         }
         Rect boundRect = boundingRect(polygon);
