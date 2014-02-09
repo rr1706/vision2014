@@ -14,6 +14,7 @@
 #include <atomic>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/stitching/stitcher.hpp>
 #include <QtNetwork>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -161,9 +162,11 @@ const Point3d worldCoordsBoth[] = {
 
 struct ThreadData {
     VideoCapture camera;
-    Mat image;
+    Mat image, original;
     vector<Target::Target> targets;
-    TargetCase pairCase;
+    vector<Target::Target> staticTargets;
+    vector<Target::Target> dynamicTargets;
+    TargetCase pairCase = NONE;
     std::chrono::high_resolution_clock::time_point start;
     std::chrono::high_resolution_clock::time_point lastImageWrite;
     int imageWriteIndex = 0;
@@ -405,40 +408,99 @@ int demo()
     return 0;
 }
 
-void runThread(ThreadData data) {
-    data.camera >> data.image;
-    double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(data.start-data.lastImageWrite).count();
-    if (saveImages && timeSinceWrite > imageInterval) {
-        sprintf(str, "%s/cam_%d/raw_img_%d.png", dirname, data.id, data.imageWriteIndex);
-        imwrite(str, data.image);
-        data.imageWriteIndex++;
-        data.lastImageWrite = data.start;
-    }
-    targetDetection(data);
+void runThread(ThreadData *data) {
+    data->camera >> data->image;
+    data->original = data->image.clone();
+    targetDetection(*data);
 }
 
 int sa()
 {
-    ThreadData threadData[CAMERA_COUNT];
+    ThreadData* threadData[CAMERA_COUNT];
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+        threadData[i] = new ThreadData;
         sprintf(str, "%s/cam_%d", dirname, i);
         if (saveImages && mkdir(str, 0755) == -1) {
             cerr << "Failed to create directory for camera: " << str << endl;
             return 1;
         }
-        threadData[i].camera.open(i);
+        threadData[i]->camera.open(i);
     }
+    auto begin = std::chrono::high_resolution_clock::now();
+    sprintf(str, "%s/sa.csv", dirname);
+    SolutionLog saLog(string(str), {"time", "heading", "x", "y"});
     thread threads[CAMERA_COUNT];
     while (true) {
         auto start = std::chrono::high_resolution_clock::now();
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-            threadData[i].start = start;
+            threadData[i]->start = start;
             threads[i] = thread(runThread, threadData[i]);
         }
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             if (threads[i].joinable())
                 threads[i].join();
         }
+        double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(start-lastImageWrite).count();
+        if (saveImages && timeSinceWrite > imageInterval) {
+            for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+                sprintf(str, "%s/cam_%d/raw_img_%d.png", dirname, i, imageWriteIndex);
+                imwrite(str, threadData[i]->original);
+            }
+            imageWriteIndex++;
+            lastImageWrite = start;
+        }
+        int P[CAMERA_COUNT][TARGET_COUNT];
+        for (unsigned int pi = 0; pi < CAMERA_COUNT; pi++) {
+            for (unsigned int pj = 0; pj < TARGET_COUNT; pj++) {
+                P[pi][pj] = -1;
+            }
+        }
+        int R[8];
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            ThreadData data = *threadData[i];
+
+            cout << "Thread " << i << " case: " << data.pairCase << endl;
+            if (data.pairCase == LEFT) {
+                R[0] = data.dynamicTargets[0].realDistance;
+                R[4] = data.staticTargets[0].realDistance;
+                P[i][4] = data.staticTargets[0].massCenter.x;
+                P[i][0] = data.dynamicTargets[0].massCenter.x;
+            } else if (data.pairCase == RIGHT) {
+                R[4] = data.dynamicTargets[0].realDistance;
+                R[0] = data.staticTargets[0].realDistance;
+                P[i][4] = data.staticTargets[0].massCenter.x;
+                P[i][0] = data.dynamicTargets[0].massCenter.x;
+            } else if (data.pairCase == ALL) {
+                R[0] = data.staticTargets[0].realDistance;
+                R[4] = data.dynamicTargets[0].realDistance;
+                R[5] = data.staticTargets[1].realDistance;
+                R[1] = data.dynamicTargets[1].realDistance;
+                P[i][0] = data.staticTargets[0].massCenter.x;
+                P[i][4] = data.dynamicTargets[0].massCenter.x;
+                P[i][5] = data.staticTargets[1].massCenter.x;
+                P[i][1] = data.dynamicTargets[1].massCenter.x;
+            }
+        }
+        double xPos, yPos, heading;
+        FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+        double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
+        saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
+        // stitching is broken currently, TODO test on odroid
+//        Mat pano;
+//        vector<Mat> imgs;
+//        Stitcher stitcher = Stitcher::createDefault();
+//        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+//            imgs.push_back(threadData[i]->original.clone());
+//        }
+//        Stitcher::Status status = stitcher.stitch(imgs, pano);
+//        if (status != Stitcher::OK) {
+//            cout << "Error stitching - Code: " <<int(status)<<endl;
+//            return -1;
+//        }
+//        Window::print("Ratchet Rockers 1706", pano, Point(pano.cols - 200, 15));
+//        sprintf(str, "xPos %.2f yPos %.2f heading %.2f", xPos, yPos, heading);
+//        Window::print(string(str), pano, Point(5, 15));
+//        imshow(windowName, pano);
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
         cout << "Processed all image code in " << seconds << " seconds." << endl;
@@ -706,6 +768,9 @@ void targetDetection(ThreadData &data)
     sortTargets(targets);
     sortTargets(dynamicTargets);
     sortTargets(staticTargets);
+    data.targets = targets;
+    data.dynamicTargets = dynamicTargets;
+    data.staticTargets = staticTargets;
     TargetCase targetCase = NONE;
     if (dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2
             && staticTargets[0].massCenter.x > dynamicTargets[0].massCenter.x) {
@@ -734,6 +799,7 @@ void targetDetection(ThreadData &data)
         P[0][5] = staticTargets[1].massCenter.x;
         P[0][1] = dynamicTargets[1].massCenter.x;
     }
+    data.pairCase = targetCase;
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
     // Get vectors for world->camera transform
@@ -764,7 +830,7 @@ void targetDetection(ThreadData &data)
 
     sprintf(str, "Case = %s", caseStr.c_str());
     putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Targets S:%u D:%u", Static_Target.size(), Dynamic_Target.size());
+    sprintf(str, "Targets S:%lu D:%lu", staticTargets.size(), dynamicTargets.size());
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
