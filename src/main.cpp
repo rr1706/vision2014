@@ -39,7 +39,7 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = DEMO;
+const ProcessingMode procMode = SA;
 const InputSource mode = CAMERA;
 const int cameraId = 1;
 const ColorSystem inputType = IR;
@@ -180,6 +180,10 @@ int main()
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     strftime(dirname,50,"%Y%m%d_%H%M%S",timeinfo);
+    if (saveImages && mkdir(dirname, 0755) == -1) {
+        cerr << "Failed to create directory " << dirname << endl;
+        return 1;
+    }
     return procMode == SA ? sa() : demo();
 }
 
@@ -418,7 +422,7 @@ int sa()
     ThreadData threadData[CAMERA_COUNT];
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
         sprintf(str, "%s/cam_%d", dirname, i);
-        if (mkdir(str, 0755) == -1) {
+        if (saveImages && mkdir(str, 0755) == -1) {
             cerr << "Failed to create directory for camera: " << str << endl;
             return 1;
         }
