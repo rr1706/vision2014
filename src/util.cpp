@@ -60,12 +60,6 @@ void WindowMode::print(WindowMode mode, cv::Mat &output) {
 }
 
 template<class T>
-T square ( T x )
-{
-    return ( x * x );
-}
-
-template<class T>
 float distance ( const T x1, const T y1, const T x2, const T y2 )
 {
     return ( sqrt ( square ( x1 - x2 ) + square ( y1 - y2 ) ) );

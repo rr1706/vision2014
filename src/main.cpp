@@ -41,11 +41,11 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = SA;
+const ProcessingMode procMode = DEMO;
 const InputSource mode = CAMERA;
-const int cameraId = 1;
-const ColorSystem inputType = IR;
-const TrackMode tracking = TARGET;
+const int cameraId = 0;
+const ColorSystem inputType = COLOR;
+const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -218,9 +218,6 @@ int demo()
     }
     if (displayMode != WindowMode::NONE) {
         namedWindow(windowName, CV_WINDOW_NORMAL);
-    }
-    if (mkdir(dirname, 0755) == -1) {
-        strcpy(dirname, ".");
     }
 
     while ( 1 )

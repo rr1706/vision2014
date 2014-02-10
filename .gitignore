@@ -6,3 +6,5 @@ Makefile
 *.user*
 xyh.log
 !test/Makefile
+*.swp
+*.orig
