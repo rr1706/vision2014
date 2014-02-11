@@ -1,5 +1,3 @@
-#include <opencv/cv.h>
-#include <opencv/highgui.h>
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
@@ -15,6 +13,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/stitching/stitcher.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <QtNetwork>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -54,6 +53,8 @@ const QHostAddress udpRecipient(0xC049EE66);
 QUdpSocket udpSocket;
 const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
+
+static const bool USE_POSE = true;
 
 // Values for threshold IR
 int gray_min = 245;
@@ -117,49 +118,22 @@ const int CHANGE_AREA = 20;
 const int CHANGE_ACCURACY = 1;
 const int CHANGE_DILATE = 1;
 
-const int CAMERA_COUNT = 3;
-const int TARGET_COUNT = 8;
+const unsigned int CAMERA_COUNT = 3;
+const unsigned int TARGET_COUNT = 8;
+const unsigned int TARGET_POINTS = 4;
 
-const Point3d worldCoordsLeft[] = {
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0},
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0}
+const vector<vector<Point3d> > worldCoords/*[TARGET_COUNT][TARGET_POINTS]*/ = {
+    { // target R1
+        {6.86, 73.925, -5.971},
+        {34.86, 73.925, -5.971},
+        {6.86, 65.925, -5.971},
+        {34.86, 65.925, -5.971},
+    }
 };
 
-const Point3d worldCoordsRight[] = {
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0},
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0}
-};
-
-const Point3d worldCoordsBoth[] = {
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0},
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0},
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0},
-    {10.91666666666667, 10.01041666666667, 0},
-    {10.91666666666667, 8.34375, 0},
-    {16.08333333333334, 8.34375, 0},
-    {16.08333333333334, 10.01041666666667, 0}
-};
+const Mat distCoeffs = (Mat_<float>(5,1) << -1.3694165419404972e-01, 2.0525879204942091e-01, 0, 0, -1.3750202297193695e-01);
+const Mat cameraMatrix = (Mat_<float>(3, 3) << 4.3636519036896868e+02 ,0,6.3950000000000000e+02, 0, 4.3636519036896868e+02, 3.5950000000000000e+02, 0,0, 1);
+Mat rotation_vector, translation_vector, rotation_matrix, inverted_rotation_matrix, cw_translate;
 
 struct ThreadData {
     VideoCapture camera;
@@ -616,8 +590,6 @@ void targetDetection(ThreadData &data)
             P[pi][pj] = -1;
         }
     }
-    vector<Point2d> pixel_coords;
-    vector<Point3d> world_coords;
     vector<Target::Target> targets, staticTargets, dynamicTargets;
 
     // Create a for loop to go through each contour (i) one at a time
@@ -682,6 +654,7 @@ void targetDetection(ThreadData &data)
             Point2i fakeDynamicCenter = boundRect.tl() + Point2i(boundRect.width / 2, 0);
             Point2i fakeStaticCenter = boundRect.tl() + Point2i(0, boundRect.height / 2);
             // lie about the values a little bit
+            // TODO fake values for the corners
             Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect};
             Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect};
             targets.push_back(fakeDynamic);
@@ -737,6 +710,7 @@ void targetDetection(ThreadData &data)
         Point2i center = {centerX, centerY};
         Target::Type targetType = (boundRect.height > boundRect.width * 2) ? Target::STATIC : Target::DYNAMIC;
         double planeDistance, realDistance;
+        int targetId = 0; // TODO find this
 
         if (targetType == Target::STATIC) // static target
         {
@@ -793,7 +767,19 @@ void targetDetection(ThreadData &data)
         }
         Moments moment = moments(contour, false);
         Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
-        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect};
+        cv::Mat rvec(1,3,cv::DataType<double>::type);
+        cv::Mat tvec(1,3,cv::DataType<double>::type);
+        cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
+        double theta = 0, psi = 0, phi = 0;
+        Point3d euler(theta, psi, phi);
+        cv::solvePnP(worldCoords[targetId], localCorners, cameraMatrix, distCoeffs, rvec, tvec);
+        cv::Rodrigues(rvec,rotationMatrix);
+            Rodrigues (rvec, rotation_matrix);
+            Rodrigues (rotation_matrix.t (), camera_rotation_vector);
+            Mat t = tvec.t ();
+            camera_translation_vector = -camera_rotation_vector * t;
+
+        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, localCorners};
         targets.push_back(target);
         if (targetType == Target::STATIC) {
             staticTargets.push_back(target);
@@ -848,6 +834,7 @@ void targetDetection(ThreadData &data)
     data.pairCase = targetCase;
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+    // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
     // Get vectors for world->camera transform
 //    solvePnP (world_coords, pixel_coords, cameraMatrix, distortion, rvec, tvec);
 
@@ -876,7 +863,7 @@ void targetDetection(ThreadData &data)
 
     sprintf(str, "Case = %s", caseStr.c_str());
     putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Targets S:%lu D:%lu", staticTargets.size(), dynamicTargets.size());
+    sprintf(str, "Targets S:%d D:%d", staticTargets.size(), dynamicTargets.size());
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);

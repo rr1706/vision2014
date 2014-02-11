@@ -55,6 +55,7 @@ namespace Target {
         cv::Point2i rectCenter;
         cv::Rect boundRect;
         cv::RotatedRect areaRect;
+        std::vector<cv::Point2f> corners;
     };
 }
 
