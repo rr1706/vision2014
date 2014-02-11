@@ -40,11 +40,11 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = DEMO;
+const ProcessingMode procMode = SA;
 const InputSource mode = CAMERA;
 const int cameraId = 0;
-const ColorSystem inputType = COLOR;
-const TrackMode tracking = BALL;
+const ColorSystem inputType = IR;
+const TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -106,7 +106,7 @@ auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
 int imageWriteIndex = 0;
 int dilations = 1;
-WindowMode::WindowMode displayMode = WindowMode::FINAL;
+WindowMode::WindowMode displayMode = WindowMode::NONE;
 
 char dirname[255];
 time_t rawtime;
@@ -473,6 +473,8 @@ int sa()
 //        sprintf(str, "xPos %.2f yPos %.2f heading %.2f", xPos, yPos, heading);
 //        Window::print(string(str), pano, Point(5, 15));
 //        imshow(windowName, pano);
+        imshow(windowName, threadData[0]->original);
+
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
         cout << "Processed all image code in " << seconds << " seconds." << endl;
@@ -609,6 +611,11 @@ void targetDetection(ThreadData &data)
         vector<vector<Point> > contoursDrawWrapper {polygon};
         if (displayMode == WindowMode::APPROXPOLY) {
             drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
+        }
+        Moments moment = moments(contour, false);
+        Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
+        if (massCenter.y > (IMAGE_HEIGHT * 0.75)) {
+            continue;
         }
         if (!isContourConvex(polygon)) {
             failedConvex++;
@@ -765,8 +772,6 @@ void targetDetection(ThreadData &data)
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
         }
-        Moments moment = moments(contour, false);
-        Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
         cv::Mat rvec(1,3,cv::DataType<double>::type);
         cv::Mat tvec(1,3,cv::DataType<double>::type);
         cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
@@ -774,10 +779,10 @@ void targetDetection(ThreadData &data)
         Point3d euler(theta, psi, phi);
         cv::solvePnP(worldCoords[targetId], localCorners, cameraMatrix, distCoeffs, rvec, tvec);
         cv::Rodrigues(rvec,rotationMatrix);
-            Rodrigues (rvec, rotation_matrix);
-            Rodrigues (rotation_matrix.t (), camera_rotation_vector);
-            Mat t = tvec.t ();
-            camera_translation_vector = -camera_rotation_vector * t;
+//        Rodrigues (rvec, rotation_matrix);
+//        Rodrigues (rotation_matrix.t (), camera_rotation_vector);
+        Mat t = tvec.t ();
+//        camera_translation_vector = -camera_rotation_vector * t;
 
         Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, localCorners};
         targets.push_back(target);
