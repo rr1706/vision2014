@@ -107,7 +107,10 @@ T square ( T x )
 }
 
 template<class T>
-float distance ( const T x1, const T y1, const T x2, const T y2 );
+double distance ( const T x1, const T y1, const T x2, const T y2 )
+{
+    return ( sqrt ( square ( x1 - x2 ) + square ( y1 - y2 ) ) );
+}
 
 float distance ( const cv::Point p1, const cv::Point p2 );
 

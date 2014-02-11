@@ -121,6 +121,8 @@ const int CHANGE_DILATE = 1;
 const unsigned int CAMERA_COUNT = 3;
 const unsigned int TARGET_COUNT = 8;
 const unsigned int TARGET_POINTS = 4;
+const int CAMERA_OFFSET[CAMERA_COUNT] = {60, 180, 300};
+int robotRotation = 0; // degrees, from alliance wall
 
 const vector<vector<Point3d> > worldCoords/*[TARGET_COUNT][TARGET_POINTS]*/ = {
     { // target R1
@@ -421,6 +423,158 @@ int sa()
             imageWriteIndex++;
             lastImageWrite = start;
         }
+        Point2i targetPair[CAMERA_COUNT][2] = {{Point2i(0, 0)}};
+        if (threadData[0]->pairCase == LEFT) {
+            targetPair[0][0] = Point2i(0, 4);
+            if (threadData[1]->pairCase == LEFT) { // opposite side of screen, may be illegal
+                targetPair[1][0] = Point2i(2, 6);
+                if (threadData[2]->pairCase == LEFT) { // max 2 left pairs
+                    cerr << "Target case invalid!" << endl;
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 8);
+                } else if (threadData[2]->pairCase == ALL) {
+                    cerr << "Target case invalid!" << endl;
+                }
+            } else if (threadData[1]->pairCase == RIGHT) {
+                targetPair[1][0] = Point2i(1, 5);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            } else if (threadData[1]->pairCase == ALL) {
+                targetPair[1][0] = Point2i(2, 6);
+                targetPair[1][1] = Point2i(3, 7);
+                if (threadData[2]->pairCase != NONE) {
+                    cerr << "C'EST IMPOSSIBLE !" << endl;
+                }
+            } else {
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            }
+        } else if (threadData[0]->pairCase == RIGHT) {
+            targetPair[0][0] = Point2i(1, 5);
+            if (threadData[1]->pairCase == LEFT) {
+                targetPair[1][0] = Point2i(2, 6);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(0, 4);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    cerr << "C'EST IMPOSSIBLE !" << endl;
+                }
+            } else if (threadData[1]->pairCase == RIGHT) {
+                targetPair[1][0] = Point2i(3, 7);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(0, 4);
+                } else if (threadData[2]->pairCase == RIGHT || threadData[2]->pairCase == ALL) {
+                    cerr << "There are not three right targets" << endl;
+                }
+            } else if (threadData[1]->pairCase == ALL) {
+                targetPair[1][0] = Point2i(2, 6);
+                targetPair[1][1] = Point2i(3, 7);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(0, 4);
+                } else if (threadData[2]->pairCase == RIGHT || threadData[2]->pairCase == ALL) {
+                    cerr << "There are not three right targets" << endl;
+                }
+            } else {
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            }
+        } else if (threadData[0]->pairCase == ALL) {
+            targetPair[0][0] = Point2i(0, 4);
+            targetPair[0][1] = Point2i(1, 5);
+            if (threadData[1]->pairCase == LEFT) {
+                targetPair[1][0] = Point2i(2, 6);
+                if (threadData[2]->pairCase == LEFT) {
+                    cerr << "c'est impossible" << endl;
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    cerr << "c'est impossible" << endl;
+                }
+            } else if (threadData[1]->pairCase == RIGHT) {
+                targetPair[1][0] = Point2i(3, 7);
+                if (threadData[2]->pairCase != NONE) {
+                    cerr << "c'est impossible" << endl;
+                }
+            } else if (threadData[1]->pairCase == ALL) {
+                // should not be possible, but idk
+                targetPair[1][0] = Point2i(2, 6);
+                targetPair[1][1] = Point2i(3, 7);
+                if (threadData[2]->pairCase != NONE) {
+                    cerr << "c'est impossible" << endl;
+                }
+            } else {
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    // should not be possible, but idk
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            }
+        } else {
+            if (threadData[1]->pairCase == LEFT) {
+                targetPair[1][0] = Point2i(0, 4);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(1, 5);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(1, 5);
+                }
+            } else if (threadData[1]->pairCase == RIGHT) {
+                targetPair[1][0] = Point2i(1, 5);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            } else if (threadData[1]->pairCase == ALL) {
+                targetPair[1][0] = Point2i(0, 4);
+                targetPair[1][1] = Point2i(1, 5);
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(2, 6);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(3, 7);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(2, 6);
+                    targetPair[2][1] = Point2i(3, 7);
+                }
+            } else {
+                if (threadData[2]->pairCase == LEFT) {
+                    targetPair[2][0] = Point2i(0, 4);
+                } else if (threadData[2]->pairCase == RIGHT) {
+                    targetPair[2][0] = Point2i(1, 5);
+                } else if (threadData[2]->pairCase == ALL) {
+                    targetPair[2][0] = Point2i(0, 4);
+                    targetPair[2][1] = Point2i(1, 5);
+                }
+            }
+        }
         int P[CAMERA_COUNT][TARGET_COUNT];
         for (unsigned int pi = 0; pi < CAMERA_COUNT; pi++) {
             for (unsigned int pj = 0; pj < TARGET_COUNT; pj++) {
@@ -433,24 +587,24 @@ int sa()
 
             cout << "Thread " << i << " case: " << data.pairCase << endl;
             if (data.pairCase == LEFT) {
-                R[0] = data.dynamicTargets[0].realDistance;
-                R[4] = data.staticTargets[0].realDistance;
-                P[i][4] = data.staticTargets[0].massCenter.x;
-                P[i][0] = data.dynamicTargets[0].massCenter.x;
+                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
+                R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
+                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == RIGHT) {
-                R[4] = data.dynamicTargets[0].realDistance;
-                R[0] = data.staticTargets[0].realDistance;
-                P[i][4] = data.staticTargets[0].massCenter.x;
-                P[i][0] = data.dynamicTargets[0].massCenter.x;
+                R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
+                R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
+                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == ALL) {
-                R[0] = data.staticTargets[0].realDistance;
-                R[4] = data.dynamicTargets[0].realDistance;
-                R[5] = data.staticTargets[1].realDistance;
-                R[1] = data.dynamicTargets[1].realDistance;
-                P[i][0] = data.staticTargets[0].massCenter.x;
-                P[i][4] = data.dynamicTargets[0].massCenter.x;
-                P[i][5] = data.staticTargets[1].massCenter.x;
-                P[i][1] = data.dynamicTargets[1].massCenter.x;
+                R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
+                R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
+                R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
+                R[targetPair[i][1].y] = data.dynamicTargets[1].realDistance;
+                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
+                P[i][targetPair[i][1].y] = data.staticTargets[1].massCenter.x;
+                P[i][targetPair[i][1].x] = data.dynamicTargets[1].massCenter.x;
             }
         }
         double xPos, yPos, heading;
@@ -868,7 +1022,7 @@ void targetDetection(ThreadData &data)
 
     sprintf(str, "Case = %s", caseStr.c_str());
     putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Targets S:%d D:%d", staticTargets.size(), dynamicTargets.size());
+    sprintf(str, "Targets S:%ld D:%ld", (long) staticTargets.size(), (long) dynamicTargets.size());
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
