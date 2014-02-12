@@ -590,22 +590,22 @@ int sa()
             cout << "Thread " << i << " case: " << data.pairCase << endl;
             if (data.pairCase == LEFT) {
                 if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
-                R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
+                    R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == RIGHT) {
                 if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
-                R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
+                    R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == ALL) {
                 if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
-                R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
+                    R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
                 if (data.staticTargets[1].realDistance - data.dynamicTargets[1].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
-                R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
+                    R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
                 R[targetPair[i][1].y] = data.dynamicTargets[1].realDistance;
                 P[i][targetPair[i][0].x] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].y] = data.dynamicTargets[0].massCenter.x;
@@ -908,7 +908,7 @@ void targetDetection(ThreadData &data)
         else
         {
             if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
-            Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
+                Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
@@ -984,30 +984,45 @@ void targetDetection(ThreadData &data)
         R[0] = staticTargets[0].realDistance;
         P[0][4] = staticTargets[0].massCenter.x;
         P[0][0] = dynamicTargets[0].massCenter.x;
+    } else if (staticTargets.size() >= 2 && dynamicTargets.size() >= 2) {
+        if (staticTargets[0].x < dynamicTargets[0].x)
+        {
+            targetCase = ALL;
+            R[0] = staticTargets[0].realDistance;
+            R[4] = dynamicTargets[0].realDistance;
+            R[5] = staticTargets[1].realDistance;
+            R[1] = dynamicTargets[1].realDistance;
+            P[0][0] = staticTargets[0].massCenter.x;
+            P[0][4] = dynamicTargets[0].massCenter.x;
+            P[0][5] = staticTargets[1].massCenter.x;
+            P[0][1] = dynamicTargets[1].massCenter.x;
+        }
+        else
+        {
+            targetCase == ALL_INVERTED; // TODO add
+            R[0] = staticTargets[1].realDistance;
+            R[4] = dynamicTargets[1].realDistance;
+            R[5] = staticTargets[0].realDistance;
+            R[1] = dynamicTargets[0].realDistance;
+            P[0][0] = staticTargets[1].massCenter.x;
+            P[0][4] = dynamicTargets[1].massCenter.x;
+            P[0][5] = staticTargets[0].massCenter.x;
+            P[0][1] = dynamicTargets[0].massCenter.x;
+        }
     }
-    if (staticTargets.size() >= 2 && dynamicTargets.size() >= 2) {
-        targetCase = ALL;
-        R[0] = staticTargets[0].realDistance;
-        R[4] = dynamicTargets[0].realDistance;
-        R[5] = staticTargets[1].realDistance;
-        R[1] = dynamicTargets[1].realDistance;
-        P[0][0] = staticTargets[0].massCenter.x;
-        P[0][4] = dynamicTargets[0].massCenter.x;
-        P[0][5] = staticTargets[1].massCenter.x;
-        P[0][1] = dynamicTargets[1].massCenter.x;
-    }
+    // TODO case inverted all
     data.pairCase = targetCase;
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
     // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
     // Get vectors for world->camera transform
-//    solvePnP (world_coords, pixel_coords, cameraMatrix, distortion, rvec, tvec);
+    //    solvePnP (world_coords, pixel_coords, cameraMatrix, distortion, rvec, tvec);
 
     // We need inverse of the world->camera transform (camera->world) to calculate
     // the camera's location
     //    Rodrigues (rvec, rotation_matrix);
     //    Rodrigues (rotation_matrix.t (), camera_rotation_vector);
-    //    Mat t = tvec.t ();
+    //    Mat t = tvec.t ( && targets.size() == 2);
     //    camera_translation_vector = -camera_rotation_vector * t;
 
     string caseStr;
