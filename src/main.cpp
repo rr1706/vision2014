@@ -40,7 +40,7 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = SA;
+const ProcessingMode procMode = DEMO;
 const InputSource mode = CAMERA;
 const int cameraId = 0;
 const ColorSystem inputType = IR;
@@ -106,7 +106,7 @@ auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
 int imageWriteIndex = 0;
 int dilations = 1;
-WindowMode::WindowMode displayMode = WindowMode::NONE;
+WindowMode::WindowMode displayMode = WindowMode::FINAL;
 
 char dirname[255];
 time_t rawtime;
@@ -123,6 +123,8 @@ const unsigned int TARGET_COUNT = 8;
 const unsigned int TARGET_POINTS = 4;
 const int CAMERA_OFFSET[CAMERA_COUNT] = {60, 180, 300};
 int robotRotation = 0; // degrees, from alliance wall
+
+const int STATIC_TARGET_IGNORE_THRESHOLD = 120; // inches
 
 const vector<vector<Point3d> > worldCoords/*[TARGET_COUNT][TARGET_POINTS]*/ = {
     { // target R1
@@ -587,24 +589,28 @@ int sa()
 
             cout << "Thread " << i << " case: " << data.pairCase << endl;
             if (data.pairCase == LEFT) {
-                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
+                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
                 R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
+                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == RIGHT) {
-                R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
-                R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
+                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
+                R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
+                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
             } else if (data.pairCase == ALL) {
+                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
                 R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
+                if (data.staticTargets[1].realDistance - data.dynamicTargets[1].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
                 R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
                 R[targetPair[i][1].y] = data.dynamicTargets[1].realDistance;
-                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
-                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
-                P[i][targetPair[i][1].y] = data.staticTargets[1].massCenter.x;
-                P[i][targetPair[i][1].x] = data.dynamicTargets[1].massCenter.x;
+                P[i][targetPair[i][0].x] = data.staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].y] = data.dynamicTargets[0].massCenter.x;
+                P[i][targetPair[i][1].x] = data.staticTargets[1].massCenter.x;
+                P[i][targetPair[i][1].y] = data.dynamicTargets[1].massCenter.x;
             }
         }
         double xPos, yPos, heading;
