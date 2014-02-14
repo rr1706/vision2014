@@ -41,10 +41,10 @@ const char KEY_SPEED = ' ';
 
 // config
 const ProcessingMode procMode = DEMO;
-const InputSource mode = CAMERA;
-const int cameraId = 0;
-const ColorSystem inputType = IR;
-const TrackMode tracking = TARGET;
+const InputSource mode = IMAGE;
+const int cameraId = 1;
+const ColorSystem inputType = COLOR;
+const TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -54,7 +54,7 @@ QUdpSocket udpSocket;
 const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
 
-static const bool USE_POSE = true;
+static const bool USE_POSE = false;
 static const bool STITCH_IMAGES = false;
 
 // Values for threshold IR
@@ -78,6 +78,8 @@ uchar ballValMin = color == RED ? 100 : 0;
 uchar ballValMax = color == RED ? 255 : 158;
 const uint ballSidesMin = 5; // for a circle
 const uint ballMinArea = 250;
+double ballRatioMin = 0.6;
+double ballRatioMax = 0.9;
 
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
@@ -103,6 +105,18 @@ vector<BallTest> ballTests = {
          vector<Point> polygon;
          approxPolyDP( contour, polygon, accuracy, true );
          return polygon.size() >= ballSidesMin;
+     }},
+    {"bumper", [](vector<Point> contour) {
+         vector<Point> polygon;
+         approxPolyDP( contour, polygon, accuracy, true );
+         Point2f ballCenterFlat;
+         float radius;
+         minEnclosingCircle(contour, ballCenterFlat, radius);
+         double areaCircle = CV_PI * square(radius);
+         int areaContour = contourArea(contour);
+         double circleRatio = areaContour / areaCircle;
+         cout << "CIRCLE " << areaCircle << " CONTOUR " << areaContour << " RADIUS " << circleRatio << endl;
+         return circleRatio > ballRatioMin && circleRatio < ballRatioMax;
      }}
 };
 auto startTime = std::chrono::high_resolution_clock::now();
@@ -696,7 +710,7 @@ int sa()
             cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
             double theta = 0, psi = 0, phi = 0;
             Point3d euler(theta, psi, phi);
-            cv::solvePnP(dataWorldCoords, localCorners, cameraMatrix, distCoeffs, rvec, tvec);
+            //cv::solvePnP(dataWorldCoords, localCorners, cameraMatrix, distCoeffs, rvec, tvec);
             cv::Rodrigues(rvec,rotationMatrix);
             //        Rodrigues (rvec, rotation_matrix);
             //        Rodrigues (rotation_matrix.t (), camera_rotation_vector);
