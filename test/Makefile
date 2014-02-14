@@ -1,9 +1,9 @@
 LDFLAGS=
 CFLAGS=-std=c++11 -I../src
 CC=g++
-SOURCES=findxyh.cpp ../src/xyh.cpp
+SOURCES=main.cpp findxyh.cpp ../src/xyh.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
-EXECUTABLE=./findxyh
+EXECUTABLE=./test
 
 all: $(EXECUTABLE)
 $(EXECUTABLE): $(OBJECTS)

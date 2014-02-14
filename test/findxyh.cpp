@@ -1,14 +1,7 @@
+#include "tests.hpp"
 #include <xyh.hpp>
 #include <iostream>
 #include <cmath>
-
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
 
 using namespace std;
 
@@ -48,10 +41,10 @@ FindXYHTest tests[] = {
 	{{270, 181, 504, 543}, {{0}, {60, 0}}, 159.99, 233.66, 182.37},
 	{{270, 181, 504, 543}, {{0}, {563, 0}}, 159.99, 233.66, 135.21},
 	{{270, 0, 0, 543}, {{0}, {563, 0}}, 156.23, 236.15, 134.35},
-	{{137, 0, 0, 0, 136}, {{296, 0, 0, 0, 342}, {0}, {0}}, 0, 0, 0}
+	//{{137, 0, 0, 0, 136}, {{296, 0, 0, 0, 342}, {0}, {0}}, 0, 0, 0}
 };
 
-int main() {
+int testFindXYH() {
 	int ret = 0;
 	for (FindXYHTest &test : tests) {
 		fillP(test.P, CAMERA_COUNT, TARGET_COUNT);
