@@ -55,6 +55,7 @@ const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
 
 static const bool USE_POSE = true;
+static const bool STITCH_IMAGES = false;
 
 // Values for threshold IR
 int gray_min = 245;
@@ -91,6 +92,9 @@ const Size winSize = Size( 5, 5 );
 const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
+/**
+  * List of tests to be run on the ball to ensure it is valid.
+  */
 vector<BallTest> ballTests = {
     {"area", [](vector<Point> contour){
          return contourArea(contour) > ballMinArea;
@@ -126,12 +130,59 @@ int robotRotation = 0; // degrees, from alliance wall
 
 const int STATIC_TARGET_IGNORE_THRESHOLD = 120; // inches
 
-const vector<vector<Point3d> > worldCoords/*[TARGET_COUNT][TARGET_POINTS]*/ = {
-    { // target R1
-        {6.86, 73.925, -5.971},
-        {34.86, 73.925, -5.971},
-        {6.86, 65.925, -5.971},
-        {34.86, 65.925, -5.971},
+/**
+  * List of coordinates in the world per target.
+  * The vector is in the format of:
+  * worldCoords[target] -> vector of points for the corners
+  */
+const vector<vector<Point3d> > worldCoords = {
+    { // R1 R[0]
+      {8.86,71.925,-5.9709},
+      {32.86,71.925,-5.9709},
+      {8.86,67.925,-5.9709},
+      {32.86,67.925,-5.9709}
+    },
+    { // R2 R[1]
+      {37.61,68.625,-0.0019},
+      {41.61,68.625,-0.0019},
+      {37.61,36.625,-0.0019},
+      {41.61,36.625,-0.0019}
+    },
+    { // R3 R[2]
+      {263.11,71.925,-5.9709},
+      {287.11,71.925,-5.9709},
+      {263.11,67.925,-5.9709},
+      {287.11,67.925,-5.9709}
+    },
+    { // R4 R[3]
+      {254.36,68.625,-0.0019},
+      {258.36,68.625,-0.0019},
+      {254.36,36.625,-0.0019},
+      {258.36,36.625,-0.0019}
+    },
+    { // R5 R[4]
+      {8.86,71.925,656.071},
+      {32.86,71.925,656.071},
+      {8.86,67.925,656.071},
+      {32.86,67.925,656.071}
+    },
+    { // R6 R[5]
+      {37.61,68.625,650.102},
+      {41.61,68.625,650.102},
+      {37.61,36.625,650.102},
+      {41.61,36.625,650.102}
+    },
+    { // R7 R[6]
+      {263.11,71.925,656.071},
+      {287.11,71.925,656.071},
+      {263.11,67.925,656.071},
+      {287.11,67.925,656.071}
+    },
+    { // R8 R[7]
+      {254.36,68.625,650.102},
+      {258.36,68.625,650.102},
+      {254.36,36.625,650.102},
+      {258.36,36.625,650.102}
     }
 };
 
@@ -178,8 +229,6 @@ int demo()
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-//        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-//        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
         data.camera = VideoCapture(videoPath);
         if (!data.camera.isOpened()) {
@@ -583,57 +632,100 @@ int sa()
                 P[pi][pj] = -1;
             }
         }
+        std::vector<cv::Point3f> dataWorldCoords;
         int R[8];
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             ThreadData data = *threadData[i];
 
             cout << "Thread " << i << " case: " << data.pairCase << endl;
             if (data.pairCase == LEFT) {
-                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
+                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
+                // do dynamic before static, x is for dynamic
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
+                }
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
+                }
             } else if (data.pairCase == RIGHT) {
-                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
+                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
+                }
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
+                }
             } else if (data.pairCase == ALL) {
-                if (data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
+                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
                 R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
-                if (data.staticTargets[1].realDistance - data.dynamicTargets[1].realDistance > STATIC_TARGET_IGNORE_THRESHOLD)
+                if (abs(data.staticTargets[1].realDistance - data.dynamicTargets[1].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
                 R[targetPair[i][1].y] = data.dynamicTargets[1].realDistance;
                 P[i][targetPair[i][0].x] = data.staticTargets[0].massCenter.x;
                 P[i][targetPair[i][0].y] = data.dynamicTargets[0].massCenter.x;
                 P[i][targetPair[i][1].x] = data.staticTargets[1].massCenter.x;
                 P[i][targetPair[i][1].y] = data.dynamicTargets[1].massCenter.x;
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
+                }
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
+                }
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][1].x][j]);
+                }
+                for (int j = 0; j < 4; j++) {
+                    dataWorldCoords.push_back(worldCoords[targetPair[i][1].y][j]);
+                }
             }
         }
         double xPos, yPos, heading;
         FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+        if (USE_POSE) {
+            cv::Mat rvec(1,3,cv::DataType<double>::type);
+            cv::Mat tvec(1,3,cv::DataType<double>::type);
+            cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
+            double theta = 0, psi = 0, phi = 0;
+            Point3d euler(theta, psi, phi);
+            cv::solvePnP(dataWorldCoords, localCorners, cameraMatrix, distCoeffs, rvec, tvec);
+            cv::Rodrigues(rvec,rotationMatrix);
+            //        Rodrigues (rvec, rotation_matrix);
+            //        Rodrigues (rotation_matrix.t (), camera_rotation_vector);
+            Mat t = tvec.t ();
+            //        camera_translation_vector = -camera_rotation_vector * t;
+        }
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
         saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
         // stitching is broken currently, TODO test on odroid
-//        Mat pano;
-//        vector<Mat> imgs;
-//        Stitcher stitcher = Stitcher::createDefault();
-//        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-//            imgs.push_back(threadData[i]->original.clone());
-//        }
-//        Stitcher::Status status = stitcher.stitch(imgs, pano);
-//        if (status != Stitcher::OK) {
-//            cout << "Error stitching - Code: " <<int(status)<<endl;
-//            return -1;
-//        }
-//        Window::print("Ratchet Rockers 1706", pano, Point(pano.cols - 200, 15));
-//        sprintf(str, "xPos %.2f yPos %.2f heading %.2f", xPos, yPos, heading);
-//        Window::print(string(str), pano, Point(5, 15));
-//        imshow(windowName, pano);
-        imshow(windowName, threadData[0]->original);
+        if (STITCH_IMAGES) {
+            Mat pano;
+            vector<Mat> imgs;
+            Stitcher stitcher = Stitcher::createDefault();
+            for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+                imgs.push_back(threadData[i]->original);
+            }
+            Stitcher::Status status = stitcher.stitch(imgs, pano);
+            if (status != Stitcher::OK) {
+                cerr << "Error stitching - Code: " << int(status) << endl;
+                imshow(windowName, threadData[0]->original);
+            } else {
+                Window::print("Ratchet Rockers 1706", pano, Point(pano.cols - 200, 15));
+                sprintf(str, "xPos %.2f yPos %.2f heading %.2f", xPos, yPos, heading);
+                Window::print(string(str), pano, Point(5, 15));
+                imshow(windowName, pano);
+            }
+        } else if (displayMode != WindowMode::NONE) {
+            imshow(windowName, threadData[0]->original);
+        }
 
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
@@ -713,8 +805,6 @@ void targetDetection(ThreadData &data)
     }
 
     // Get rid of remaining noise
-//    dilate(img, img, kernel);
-//    erode(img, img, kernel, Point(-1, -1), 2);
     morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
     if (displayMode == WindowMode::DILATE) {
         Mat dilate = img.clone();
@@ -792,7 +882,6 @@ void targetDetection(ThreadData &data)
             if (deadSpace > 0.3) continue;
             Rect boundRect = boundingRect(contour);
             rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
-//            Moments theMoment = moments(contour, false);
             sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
             Window::print(string(str), dst, rect_points[2]);
             sprintf(str, "H:%.2f HBR:%d", height, boundRect.height);
@@ -805,8 +894,6 @@ void targetDetection(ThreadData &data)
             Point2i center = {centerX, centerY};
 
             Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
-//            double refinedHeight = distance(localCorners[0], localCorners[2]);
-//            double flatHeight = localCorners[2].y - localCorners[0].y;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
@@ -835,7 +922,6 @@ void targetDetection(ThreadData &data)
             continue;
         }
         Rect boundRect = boundingRect(polygon);
-//        rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
         RotatedRect minRect = minAreaRect( Mat(contour));
         Point2f rect_points[4];
         minRect.points(rect_points);
@@ -867,23 +953,19 @@ void targetDetection(ThreadData &data)
         corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
         // test aspect ratio
-//        double lengthTop = distance(localCorners[0], localCorners[1]);
-//        double lengthBottom = distance(localCorners[2], localCorners[3]);
-//        double lengthLeft = distance(localCorners[0], localCorners[2]);
-//        double lengthRight = distance(localCorners[1], localCorners[3]);
         success++;
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
         Target::Type targetType = (boundRect.height > boundRect.width * 2) ? Target::STATIC : Target::DYNAMIC;
         double planeDistance, realDistance;
-        int targetId = 0; // TODO find this
 
         if (targetType == Target::STATIC) // static target
         {
             Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
-//            double refinedHeight = distance(localCorners[0], localCorners[2]);
-//            double flatHeight = localCorners[2].y - localCorners[0].y;
+            //  refinedHeight = distance(localCorners[0], localCorners[2]);
+            //  flatHeight = localCorners[2].y - localCorners[0].y;        int targetId = 0; // TODO find this, 0-7
+
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
@@ -932,17 +1014,6 @@ void targetDetection(ThreadData &data)
             //save off as dynamic target
             Dynamic_Target.push_back(contours[i]);
         }
-        cv::Mat rvec(1,3,cv::DataType<double>::type);
-        cv::Mat tvec(1,3,cv::DataType<double>::type);
-        cv::Mat rotationMatrix(3,3,cv::DataType<double>::type);
-        double theta = 0, psi = 0, phi = 0;
-        Point3d euler(theta, psi, phi);
-        cv::solvePnP(worldCoords[targetId], localCorners, cameraMatrix, distCoeffs, rvec, tvec);
-        cv::Rodrigues(rvec,rotationMatrix);
-//        Rodrigues (rvec, rotation_matrix);
-//        Rodrigues (rotation_matrix.t (), camera_rotation_vector);
-        Mat t = tvec.t ();
-//        camera_translation_vector = -camera_rotation_vector * t;
 
         Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, localCorners};
         targets.push_back(target);
@@ -985,7 +1056,7 @@ void targetDetection(ThreadData &data)
         P[0][4] = staticTargets[0].massCenter.x;
         P[0][0] = dynamicTargets[0].massCenter.x;
     } else if (staticTargets.size() >= 2 && dynamicTargets.size() >= 2) {
-        if (staticTargets[0].x < dynamicTargets[0].x)
+        if (staticTargets[0].massCenter.x < dynamicTargets[0].massCenter.x)
         {
             targetCase = ALL;
             R[0] = staticTargets[0].realDistance;
@@ -999,7 +1070,7 @@ void targetDetection(ThreadData &data)
         }
         else
         {
-            targetCase == ALL_INVERTED; // TODO add
+            targetCase == ALL_INVERTED;
             R[0] = staticTargets[1].realDistance;
             R[4] = dynamicTargets[1].realDistance;
             R[5] = staticTargets[0].realDistance;
@@ -1010,20 +1081,10 @@ void targetDetection(ThreadData &data)
             P[0][1] = dynamicTargets[0].massCenter.x;
         }
     }
-    // TODO case inverted all
     data.pairCase = targetCase;
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
     // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
-    // Get vectors for world->camera transform
-    //    solvePnP (world_coords, pixel_coords, cameraMatrix, distortion, rvec, tvec);
-
-    // We need inverse of the world->camera transform (camera->world) to calculate
-    // the camera's location
-    //    Rodrigues (rvec, rotation_matrix);
-    //    Rodrigues (rotation_matrix.t (), camera_rotation_vector);
-    //    Mat t = tvec.t ( && targets.size() == 2);
-    //    camera_translation_vector = -camera_rotation_vector * t;
 
     string caseStr;
     switch (targetCase) {

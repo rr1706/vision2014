@@ -22,7 +22,8 @@ enum TargetCase {
     NONE = 0,
     ALL = 1,
     RIGHT = 2,
-    LEFT = 3
+    LEFT = 3,
+    ALL_INVERTED = ALL // TODO make this actually have an effect
 };
 
 enum ColorSystem {
