@@ -1336,7 +1336,8 @@ void ballDetection(ThreadData &data)
         QByteArray datagram = "balltrack "
                 + QByteArray::number(distanceToBall) + " "
                 + QByteArray::number(angleToBall) + " "
-                + QByteArray::number(ballVelocity);
+                + QByteArray::number(ballVelocity) + " "
+                + QByteArray::number(ballHeading);
 
         udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
     }
