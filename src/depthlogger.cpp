@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <stdio.h>
 #include <vector>
 #include "depthlogger.h"
 #include "util.hpp"
@@ -89,7 +90,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
     thresholded = depth - thresholded;
     // Create a matrix of the same type and size as depth_mat (for dst)
     dst.create(thresholded.size(), thresholded.type());
-    // Reduce noistruee with a kernel 3x3
+    // Reduce noise with a kernel 3x3
     blur(thresholded, detectedEdges, Size(3, 3));
     // Canny detector
     Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernelSize);
@@ -100,23 +101,31 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
     vector<Vec4i> hierarchy;
     imshow("DST", dst);
     cvtColor(color, color, CV_BGR2RGB);
-    cvtcolor(color, color, CV_RGB2HSV);
+    Mat rgbColorMat = color.clone();
+    cvtColor(color, color, CV_RGB2HSV);
     findContours(dst, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, Point(0, 0));
     vector<vector<Point> > succeededContours = getSuccessfulContours(contours, ballTests);
     vector<vector<Point> > largestContour(static_cast<unsigned int>(1));
+    Scalar largestRGB;
     int threshFails = 0;
     for (vector<Point> &contour : succeededContours) {
-        Scalar ptColor = color.at<unsigned char>(center[i]);
-        if (!thresholdPixel(ptColor, ballthresh)) { // TODO more constraints / tests
+        Point2f center;
+        float radius;
+        minEnclosingCircle(contour, center, radius);
+        Scalar ptColor = color.at<unsigned char>(center);
+        Scalar rgbColor = rgbColorMat.at<unsigned char>(center);
+        if (!thresholdPixel(ptColor, ballThreshR)) { // TODO more constraints / tests
             threshFails++;
             continue;
         }
         if (largestContour.size() > 0 && largestContour[0].size() > 0) {
             if (contourArea(contour) > contourArea(largestContour[0])) {
                 largestContour[0] = contour;
+                largestRGB = rgbColor;
             }
         } else {
             largestContour[0] = contour;
+            largestRGB = rgbColor;
         }
     }
     if (largestContour[0].size() == 0) {
@@ -124,6 +133,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
     }
     cout << "Thresh fails: " << threshFails << endl;
     for (vector<Point> &contour : largestContour) {
+        printf("Ball Color R%d G%d B%d", largestRGB[0], largestRGB[1], largestRGB[2]);
         vector<Point> polygon;
         approxPolyDP(contour, polygon, ballAccuracy, true);
         Point2f ballCenterFlat;

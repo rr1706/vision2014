@@ -27,6 +27,7 @@
 #define STATIC_TARGET_HEIGHT  32.25 //in
 #define DYNAMIC_TARGET_HEIGHT 4 //in
 #define COMBINED_TARGET_HEIGHT 35.3 //in
+#define BUMPER_HEIGHT 5 //in
 
 #define DEPTHLOGTEST
 
@@ -43,11 +44,11 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = SA;
-const InputSource mode = IMAGE;
-const int cameraId = 1;
+const ProcessingMode procMode = DEMO;
+const InputSource mode = CAMERA;
+const int cameraId = 0;
 const ColorSystem inputType = COLOR;
-const TrackMode tracking = BALL;
+TrackMode tracking = BALL;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -127,7 +128,7 @@ auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
 int imageWriteIndex = 0;
 int dilations = 1;
-WindowMode::WindowMode displayMode = WindowMode::NONE;
+WindowMode::WindowMode displayMode = WindowMode::FINAL;
 
 char dirname[255];
 time_t rawtime;
@@ -271,6 +272,7 @@ int demo()
         }
     }
     int currentSave = 0;
+    int trackI = tracking;
 
     Mat img, inframe;
 
@@ -294,7 +296,7 @@ int demo()
         }
 
         //Break out of loop if esc is pressed
-        switch (char key = waitKey(10)) {
+        switch (char key = waitKey(30)) {
         case KEY_QUIT:
             return 0;
             break;
@@ -420,6 +422,11 @@ int demo()
             break;
         case 'I':
             currentThreshold = Thresh::IR_MAX;
+            break;
+        case 'M':
+            if (++trackI > BALL) trackI = 0;
+            tracking = static_cast<TrackMode>(trackI);
+            trackI = tracking;
             break;
         default:
             if (key >= '0' && key <= '9') {
@@ -663,15 +670,15 @@ int sa()
         std::vector<cv::Point3f> dataWorldCoords;
         int R[8];
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-            ThreadData data = *threadData[i];
+            ThreadData *data = threadData[i];
 
-            cout << "Thread " << i << " case: " << data.pairCase << endl;
-            if (data.pairCase == LEFT) {
-                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
-                    R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
-                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
-                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
-                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
+            cout << "Thread " << i << " case: " << data->pairCase << endl;
+            if (data->pairCase == LEFT) {
+                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+                    R[targetPair[i][0].y] = data->staticTargets[0].realDistance;
+                R[targetPair[i][0].x] = data->dynamicTargets[0].realDistance;
+                P[i][targetPair[i][0].y] = data->staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].x] = data->dynamicTargets[0].massCenter.x;
                 // do dynamic before static, x is for dynamic
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
@@ -679,29 +686,29 @@ int sa()
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
                 }
-            } else if (data.pairCase == RIGHT) {
-                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
-                    R[targetPair[i][0].y] = data.staticTargets[0].realDistance;
-                R[targetPair[i][0].x] = data.dynamicTargets[0].realDistance;
-                P[i][targetPair[i][0].y] = data.staticTargets[0].massCenter.x;
-                P[i][targetPair[i][0].x] = data.dynamicTargets[0].massCenter.x;
+            } else if (data->pairCase == RIGHT) {
+                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+                    R[targetPair[i][0].y] = data->staticTargets[0].realDistance;
+                R[targetPair[i][0].x] = data->dynamicTargets[0].realDistance;
+                P[i][targetPair[i][0].y] = data->staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].x] = data->dynamicTargets[0].massCenter.x;
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
                 }
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
                 }
-            } else if (data.pairCase == ALL) {
-                if (abs(data.staticTargets[0].realDistance - data.dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
-                    R[targetPair[i][0].x] = data.staticTargets[0].realDistance;
-                R[targetPair[i][0].y] = data.dynamicTargets[0].realDistance;
-                if (abs(data.staticTargets[1].realDistance - data.dynamicTargets[1].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
-                    R[targetPair[i][1].x] = data.staticTargets[1].realDistance;
-                R[targetPair[i][1].y] = data.dynamicTargets[1].realDistance;
-                P[i][targetPair[i][0].x] = data.staticTargets[0].massCenter.x;
-                P[i][targetPair[i][0].y] = data.dynamicTargets[0].massCenter.x;
-                P[i][targetPair[i][1].x] = data.staticTargets[1].massCenter.x;
-                P[i][targetPair[i][1].y] = data.dynamicTargets[1].massCenter.x;
+            } else if (data->pairCase == ALL) {
+                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+                    R[targetPair[i][0].x] = data->staticTargets[0].realDistance;
+                R[targetPair[i][0].y] = data->dynamicTargets[0].realDistance;
+                if (abs(data->staticTargets[1].realDistance - data->dynamicTargets[1].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+                    R[targetPair[i][1].x] = data->staticTargets[1].realDistance;
+                R[targetPair[i][1].y] = data->dynamicTargets[1].realDistance;
+                P[i][targetPair[i][0].x] = data->staticTargets[0].massCenter.x;
+                P[i][targetPair[i][0].y] = data->dynamicTargets[0].massCenter.x;
+                P[i][targetPair[i][1].x] = data->staticTargets[1].massCenter.x;
+                P[i][targetPair[i][1].y] = data->dynamicTargets[1].massCenter.x;
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].x][j]);
                 }
@@ -781,7 +788,7 @@ void targetDetection(ThreadData &data)
 //    }
     if (displayMode == WindowMode::RAW) {
         Mat input = img.clone();
-        cvtColor(input, input, inputType == IR ? CV_GRAY2RGB : CV_HSV2RGB);
+        cvtColor(input, input, /*inputType == IR ? */CV_GRAY2RGB/* : CV_HSV2RGB*/);
         Window::print("Ratchet Rockers 1706", input, Point(IMAGE_WIDTH - 200, 15));
         sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
         putText(input, str, Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
@@ -1174,6 +1181,7 @@ void ballDetection(ThreadData &data)
     }
     cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
+//    imshow("hsv", img);
     // Threshold image to
     inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
     if (displayMode == WindowMode::THRESHOLD) {
@@ -1333,8 +1341,8 @@ void ballDetection(ThreadData &data)
         // store five points here
         // calculate median of first five for first point
         // calculate median of last five for second point
-        ballPositions.log("pos_px_x", ballCenterFlat.x).log("pos_px_y", ballCenterFlat.y);
-        ballPositions.log("distance", distanceToBall).log("rotation", ballHeading);
+//        ballPositions.log("pos_px_x", ballCenterFlat.x).log("pos_px_y", ballCenterFlat.y);
+//        ballPositions.log("distance", distanceToBall).log("rotation", ballHeading);
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
@@ -1352,12 +1360,12 @@ void ballDetection(ThreadData &data)
 
         udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
     }
-    if (ballPositions.isOpen()) {
-        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
-        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).log("image", imageWriteIndex).flush();
-    } else {
-        cerr << "Unable to write solutions log" << endl;
-    }
+//    if (ballPositions.isOpen()) {
+//        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
+//        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).log("image", imageWriteIndex).flush();
+//    } else {
+//        cerr << "Unable to write solutions log" << endl;
+//    }
     lastFrameStart = timeNow;
     ballFrameCount++;
 }
