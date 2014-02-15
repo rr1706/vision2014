@@ -1,6 +1,9 @@
 #include <util.hpp>
 #include <iostream>
 
+using namespace std;
+using namespace cv;
+
 std::string Thresh::str(Part part) {
     switch (part) {
     case HUE_MIN:
@@ -212,3 +215,12 @@ void sortTargets(std::vector<Target::Target> &targets)
         }
     }
 }
+
+bool thresholdPixel(cv::Scalar pixel, ThresholdDataHSV thresh)
+{
+    unsigned char h = pixel[0], s = pixel[1], v = pixel[2];
+    return h >= thresh.h_min && h <= thresh.h_max
+            && s >= thresh.s_min && s <= thresh.s_max
+            && v >= thresh.v_min && s <= thresh.v_max;
+}
+

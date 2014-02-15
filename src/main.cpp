@@ -17,15 +17,18 @@
 #include <QtNetwork>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <signal.h>
 #include "util.hpp"
 #include "solutionlog.hpp"
 #include "xyh.hpp"
+#include "depthlogger.h"
+#include "imagewriter.h"
 
-#define FOV_Y 79//degrees
-#define FOV_X 111.426 //degrees
 #define STATIC_TARGET_HEIGHT  32.25 //in
 #define DYNAMIC_TARGET_HEIGHT 4 //in
 #define COMBINED_TARGET_HEIGHT 35.3 //in
+
+#define DEPTHLOGTEST
 
 // OpenCV Namespace
 using namespace cv;
@@ -40,7 +43,7 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = DEMO;
+const ProcessingMode procMode = SA;
 const InputSource mode = IMAGE;
 const int cameraId = 1;
 const ColorSystem inputType = COLOR;
@@ -124,7 +127,7 @@ auto lastImageWrite = std::chrono::high_resolution_clock::now();
 
 int imageWriteIndex = 0;
 int dilations = 1;
-WindowMode::WindowMode displayMode = WindowMode::FINAL;
+WindowMode::WindowMode displayMode = WindowMode::NONE;
 
 char dirname[255];
 time_t rawtime;
@@ -206,7 +209,7 @@ Mat rotation_vector, translation_vector, rotation_matrix, inverted_rotation_matr
 
 struct ThreadData {
     VideoCapture camera;
-    Mat image, original;
+    Mat image, original, targetDetect;
     vector<Target::Target> targets;
     vector<Target::Target> staticTargets;
     vector<Target::Target> dynamicTargets;
@@ -215,27 +218,44 @@ struct ThreadData {
     std::chrono::high_resolution_clock::time_point lastImageWrite;
     int imageWriteIndex = 0;
     int id = 0;
+    SolutionLog ballLog;
 };
 
 int demo();
 int sa();
+int dlog();
 void targetDetection(ThreadData &data);
 void ballDetection(ThreadData &data);
 
+void onSignal(int signum)
+{
+    if (signum == SIGABRT) {
+    }
+}
+
 int main()
 {
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    strftime(dirname,50,"%Y%m%d_%H%M%S",timeinfo);
-    if (saveImages && mkdir(dirname, 0755) == -1) {
-        cerr << "Failed to create directory " << dirname << endl;
-        return 1;
+    switch (procMode) {
+    case SA:
+        return sa();
+    case DEMO:
+        return demo();
+    case DEPTH:
+        return dlog();
     }
-    return procMode == SA ? sa() : demo();
+}
+
+int dlog()
+{
+    VideoCapture camera(CV_CAP_OPENNI_ASUS);
+    if (!camera.isOpened()) return 1;
+    DepthLogger log(camera);
+    return log.start();
 }
 
 int demo()
 {
+    ImageWriter writer(true, 1.0, "demo");
     ThreadData data;
     if (mode == CAMERA) {
         data.camera = VideoCapture(cameraId);
@@ -407,13 +427,7 @@ int demo()
                 displayMode = static_cast<WindowMode::WindowMode>(ikey);
             }
         }
-        double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(start-lastImageWrite).count();
-        if (saveImages && timeSinceWrite > imageInterval) {
-            sprintf(str, "%s/raw_img_%d.png", dirname, imageWriteIndex);
-            imwrite(str, img);
-            imageWriteIndex++;
-            lastImageWrite = start;
-        }
+        writer.writeImage(img);
         data.image = img;
         switch (tracking) {
         case BALL:
@@ -450,20 +464,26 @@ int demo()
 void runThread(ThreadData *data) {
     data->camera >> data->image;
     data->original = data->image.clone();
+    Mat targetROI = data->image(Rect(0,0,data->image.cols, data->image.rows * (2.0/3)));
+    data->image = targetROI;
     targetDetection(*data);
+    data->targetDetect = data->image.clone();
+    data->image = data->original.clone();
+    Mat ballROI = data->image(Rect(0,data->image.rows * (2.0/3),data->image.cols, data->image.rows * (1.0/3)));
+    data->image = ballROI;
+    ballDetection(*data);
 }
 
 int sa()
 {
     ThreadData* threadData[CAMERA_COUNT];
+    ImageWriter* writers[CAMERA_COUNT];
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
         threadData[i] = new ThreadData;
-        sprintf(str, "%s/cam_%d", dirname, i);
-        if (saveImages && mkdir(str, 0755) == -1) {
-            cerr << "Failed to create directory for camera: " << str << endl;
-            return 1;
-        }
+        sprintf(str, "cam_%d", i);
+        writers[i] = new ImageWriter(true, 1.0, str);
         threadData[i]->camera.open(i);
+        threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
     }
     auto begin = std::chrono::high_resolution_clock::now();
     sprintf(str, "%s/sa.csv", dirname);
@@ -478,15 +498,9 @@ int sa()
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             if (threads[i].joinable())
                 threads[i].join();
-        }
-        double timeSinceWrite = std::chrono::duration_cast<std::chrono::duration<double> >(start-lastImageWrite).count();
-        if (saveImages && timeSinceWrite > imageInterval) {
-            for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-                sprintf(str, "%s/cam_%d/raw_img_%d.png", dirname, i, imageWriteIndex);
-                imwrite(str, threadData[i]->original);
-            }
-            imageWriteIndex++;
-            lastImageWrite = start;
+        }        
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            writers[i]->writeImage(threadData[i]->original);
         }
         Point2i targetPair[CAMERA_COUNT][2] = {{Point2i(0, 0)}};
         if (threadData[0]->pairCase == LEFT) {
@@ -737,8 +751,8 @@ int sa()
                 Window::print(string(str), pano, Point(5, 15));
                 imshow(windowName, pano);
             }
-        } else if (displayMode != WindowMode::NONE) {
-            imshow(windowName, threadData[0]->original);
+        } else /*if (displayMode != WindowMode::NONE)*/ {
+            imshow(windowName, threadData[0]->targetDetect);
         }
 
         auto finish = std::chrono::high_resolution_clock::now();
@@ -754,17 +768,17 @@ int sa()
 
 void targetDetection(ThreadData &data)
 {
-    Mat img = data.image;
+    Mat img = data.image.clone();
     int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
     // Store the original image img to the Mat dst
     Mat dst = img.clone();
 
     // Convert image from input to threshold method
-    if (inputType == IR) {
+//    if (inputType == IR) {
         cvtColor(img, img, CV_BGR2GRAY);
-    } else if (inputType == COLOR) {
-        cvtColor(img, img, CV_BGR2HSV);
-    }
+//    } else if (inputType == COLOR) {
+//        cvtColor(img, img, CV_BGR2HSV);
+//    }
     if (displayMode == WindowMode::RAW) {
         Mat input = img.clone();
         cvtColor(input, input, inputType == IR ? CV_GRAY2RGB : CV_HSV2RGB);
@@ -773,13 +787,14 @@ void targetDetection(ThreadData &data)
         putText(input, str, Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
         imshow(windowName, input);
     }
+    data.image = img;
 
     // "Threshold" image to pixels in the ranges
-    if (inputType == IR) {
+//    if (inputType == IR) {
         threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
-    } else if (inputType == COLOR) {
-        inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
-    }
+//    } else if (inputType == COLOR) {
+//        inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
+//    }
     if (displayMode == WindowMode::THRESHOLD) {
         Mat thresh = img.clone();
         cvtColor(thresh, thresh, CV_GRAY2RGB); // binary image at this point
@@ -910,7 +925,7 @@ void targetDetection(ThreadData &data)
             Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
 
             sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Combined));
@@ -982,7 +997,7 @@ void targetDetection(ThreadData &data)
 
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
             planeDistance = Plane_Distance;
             realDistance = Real_Distance;
@@ -1007,7 +1022,7 @@ void targetDetection(ThreadData &data)
                 Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle_Dynamic = (FOV_X / IMAGE_WIDTH) * Center_Static_X;
+            double In_Screen_Angle_Dynamic = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
             planeDistance = Plane_Distance_Dynamic;
             realDistance = Real_Distance_Dynamic;
@@ -1142,16 +1157,12 @@ const double ballWidth = 0.6096; // meters
 Point2d lastBallPosition = {0, 0};
 deque<Point2d> lastBallPositions;
 auto lastFrameStart = std::chrono::high_resolution_clock::now();
-SolutionLog ballPositions;
+//SolutionLog ballPositions;
 int ballFrameCount = 0;
 void ballDetection(ThreadData &data)
 {
     Mat img = data.image;
     int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
-    if (!ballPositions.isOpen()) {
-        sprintf(str, "%s/balltrack.csv", dirname);
-        ballPositions.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
-    }
     assert(inputType == COLOR); // Ball can only be detected on color image
     auto timeNow = std::chrono::high_resolution_clock::now();
     double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;

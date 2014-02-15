@@ -20,12 +20,18 @@ SOURCES += \
     solutionlog.cpp \
     xyh.cpp \
     util.cpp \
-    main.cpp
+    main.cpp \
+    depthlogger.cpp \
+    depthtools.cpp \
+    imagewriter.cpp
 
-LIBS += `pkg-config --libs opencv`
-QMAKE_CXXFLAGS += -std=c++0x
+LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui #`pkg-config --libs opencv`
+QMAKE_CXXFLAGS += -std=c++0x -I/usr/include/ni
 
 HEADERS += \
     util.hpp \
     solutionlog.hpp \
-    xyh.hpp
+    xyh.hpp \
+    depthlogger.h \
+    depthtools.h \
+    imagewriter.h

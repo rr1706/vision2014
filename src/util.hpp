@@ -7,9 +7,23 @@
 #include <vector>
 #include <deque>
 
+struct {
+    cv::Point2d fieldOfView;
+} cameraInfo = {{111.426, 79}};
+
+struct {
+    double ballWidth;
+} fieldData = {0.6096};
+
+struct ThresholdDataHSV {
+    unsigned char h_min, h_max, s_min, s_max, v_min, v_max;
+};
+extern ThresholdDataHSV ballThreshR;
+
 enum ProcessingMode {
     SA,
-    DEMO
+    DEMO,
+    DEPTH
 };
 
 enum InputSource {
@@ -101,6 +115,11 @@ struct BallTest {
     ContourConstraint check;
 };
 
+/**
+  * List of tests to be run on the ball to ensure it is valid.
+  */
+extern std::vector<BallTest> ballTests;
+
 template<class T>
 T square ( T x )
 {
@@ -125,7 +144,13 @@ bool isExtraLong(const double ratio);
 
 double inchesToMeters(const double inches);
 
-
+/**
+ * @brief thresholdPixel Threshold pixel with HSV data
+ * @param pixel HSV scalar from the image Mat
+ * @param thresh Threshold data
+ * @return true if the pixel passes the threshold, false otherwise
+ */
+bool thresholdPixel(cv::Scalar pixel, ThresholdDataHSV thresh);
 
 /**
  * @brief passesTests Tests if contour passes list of tests
