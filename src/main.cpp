@@ -1381,6 +1381,18 @@ vector<ThresholdDataHSV> robotBumpers = {
     {89, 187, 59, 164, 132, 255} // BLUE
 };
 
+vector<BallTest> testsRobots = {
+    {"area", [](vector<Point> contour) {
+         return contourArea(contour) > 500;
+     }},
+    {"l", [](vector<Point> contour) {
+         Rect boundRect = boundingRect(contour);
+         double contourRatio = static_cast<double>(contourArea(contour)) / boundRect.area();
+         if (contourRatio < 0.3 && contourRatio > 0.1) printf("Successful ratio is %f.\n", contourRatio);
+         return contourRatio < 0.3 && contourRatio > 0.1;
+     }}
+};
+
 void robotDetection(ThreadData &data)
 {
     cvtColor(data.image, data.image, CV_BGR2RGB);
@@ -1399,6 +1411,15 @@ void robotDetection(ThreadData &data)
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
     findContours(data.image, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
-    if (displayMode == WindowMode::FINAL) imshow(windowName, data.image);
+    vector<vector<Point> > succeededContours = getSuccessfulContours(contours, testsRobots);
+    Mat passing = Mat::zeros(data.image.rows, data.image.cols, CV_8U), final = Mat::zeros(data.image.rows, data.image.cols, CV_8U);
+    cvtColor(passing, passing, CV_GRAY2BGR);
+    drawContours(passing, succeededContours, -1, Scalar(255, 0, 0));
+    if (displayMode == WindowMode::PASS) imshow(windowName, passing);
+    for (vector<Point> &contour : succeededContours) {
+        Rect boundRect = boundingRect(contour);
+        rectangle(passing, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0));
+    }
+    if (displayMode == WindowMode::FINAL) imshow(windowName, passing);
 }
 
