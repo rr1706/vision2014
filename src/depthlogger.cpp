@@ -8,8 +8,6 @@
 using namespace std;
 using namespace cv;
 
-ThresholdDataHSV ballThreshR = {115, 150, 116, 255, 100, 255};
-
 static const char* calibrateFile = "./calibrate.png";
 static int lowThreshold = 4;
 static int kernelSize = 3;

@@ -73,6 +73,8 @@ const int saturation_max = 255;
 const int value_min = 140;
 const int value_max = 255;
 
+ThresholdDataHSV ballThreshR = {115, 150, 116, 255, 100, 255};
+
 // Values for threshold ball track
 uchar ballHueMin = color == RED ? 115 : 31;
 uchar ballHueMax = color == RED ? 150 : 128;
@@ -227,6 +229,7 @@ int sa();
 int dlog();
 void targetDetection(ThreadData &data);
 void ballDetection(ThreadData &data);
+void robotDetection(ThreadData &data);
 
 void onSignal(int signum)
 {
@@ -296,7 +299,7 @@ int demo()
         }
 
         //Break out of loop if esc is pressed
-        switch (char key = waitKey(30)) {
+        switch (char key = waitKey(1)) {
         case KEY_QUIT:
             return 0;
             break;
@@ -423,8 +426,8 @@ int demo()
         case 'I':
             currentThreshold = Thresh::IR_MAX;
             break;
-        case 'M':
-            if (++trackI > BALL) trackI = 0;
+        case 'm':
+            if (++trackI > ROBOT) trackI = 0;
             tracking = static_cast<TrackMode>(trackI);
             trackI = tracking;
             break;
@@ -442,6 +445,9 @@ int demo()
             break;
         case TARGET:
             targetDetection(data);
+            break;
+        case ROBOT:
+            robotDetection(data);
             break;
         }
         // Note: img is dirty after running these functions
@@ -1369,3 +1375,30 @@ void ballDetection(ThreadData &data)
     lastFrameStart = timeNow;
     ballFrameCount++;
 }
+
+vector<ThresholdDataHSV> robotBumpers = {
+    {115, 150, 116, 255, 100, 255}, // RED
+    {89, 187, 59, 164, 132, 255} // BLUE
+};
+
+void robotDetection(ThreadData &data)
+{
+    cvtColor(data.image, data.image, CV_BGR2RGB);
+    if (displayMode == WindowMode::RAW) imshow(windowName, data.image);
+    cvtColor(data.image, data.image, CV_RGB2HSV);
+    Mat threshOutput = Mat::zeros(data.image.rows, data.image.cols, CV_8U), threshDest;
+    for (ThresholdDataHSV &thresh : robotBumpers) {
+        inRange(data.image, Scalar(thresh.h_min, thresh.s_min, thresh.v_min),
+                Scalar(thresh.h_max, thresh.s_max, thresh.v_max), threshDest);
+        threshOutput += threshDest;
+    }
+    data.image = threshOutput;
+    if (displayMode == WindowMode::THRESHOLD) imshow(windowName, data.image);
+    morphologyEx(data.image, data.image, MORPH_OPEN, kernel, Point(-1, -1), dilations);
+    if (displayMode == WindowMode::DILATE) imshow(windowName, data.image);
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+    findContours(data.image, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
+    if (displayMode == WindowMode::FINAL) imshow(windowName, data.image);
+}
+

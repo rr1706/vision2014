@@ -47,7 +47,8 @@ enum ColorSystem {
 
 enum TrackMode {
     TARGET = 0,
-    BALL = 1
+    BALL = 1,
+    ROBOT = 2
 };
 
 enum TeamColor {
