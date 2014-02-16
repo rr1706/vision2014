@@ -131,12 +131,6 @@ std::vector<std::vector<cv::Point> > getSuccessfulContours(
     return succeededContours;
 }
 
-template<class List>
-cv::Point2d getMedianPoint(List &items, int start, int end)
-{
-    throw;
-}
-
 void T2B_L2R(std::vector<cv::Point2f> pt)
 {
     int temp_x;
@@ -202,7 +196,7 @@ void sortTargets(std::vector<Target::Target> &targets)
     bool changed = true;
     while (changed) {
         changed = false;
-        for (uint i = 0; i < targets.size(); i++) {
+        for (unsigned int i = 0; i < targets.size(); i++) {
             Target::Target target = targets[i];
             if (i + 1 != targets.size()) {
                 Target::Target nextTarget = targets[i + 1];

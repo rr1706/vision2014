@@ -175,9 +175,6 @@ std::vector<std::vector<cv::Point> > getSuccessfulContours(
 
 void T2B_L2R(std::vector<cv::Point2f> pt);
 
-template<class List>
-cv::Point2d getMedianPoint(List &items, int start, int end);
-
 template<class ArrayOfPoints>
 void T2B_L2R(ArrayOfPoints pt);
 

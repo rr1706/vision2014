@@ -11,7 +11,7 @@ using namespace cv;
 static const char* calibrateFile = "./calibrate.png";
 static int lowThreshold = 4;
 static int kernelSize = 3;
-static int ratio = 3;
+static int cannyRatio = 3;
 static int ballAccuracy = 3;
 
 DepthLogger::DepthLogger(VideoCapture &camera)
@@ -59,10 +59,10 @@ int DepthLogger::start()
             lowThreshold--;
             break;
         case 'r':
-            ratio--;
+            cannyRatio--;
             break;
         case 'R':
-            ratio++;
+            cannyRatio++;
             break;
 
         }
@@ -91,7 +91,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
     // Reduce noise with a kernel 3x3
     blur(thresholded, detectedEdges, Size(3, 3));
     // Canny detector
-    Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernelSize);
+    Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * cannyRatio, kernelSize);
     // Using Canny's output as a mask, we display our result
     dst = Scalar::all(0);
     depth.copyTo(dst, detectedEdges);
@@ -131,7 +131,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
     }
     cout << "Thresh fails: " << threshFails << endl;
     for (vector<Point> &contour : largestContour) {
-        printf("Ball Color R%d G%d B%d", largestRGB[0], largestRGB[1], largestRGB[2]);
+        printf("Ball Color R%f G%f B%f", largestRGB[0], largestRGB[1], largestRGB[2]);
         vector<Point> polygon;
         approxPolyDP(contour, polygon, ballAccuracy, true);
         Point2f ballCenterFlat;
@@ -147,7 +147,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
         ballCenterFlat.y = -(ballCenterFlat.y - imageHeight / 2);
         double ballPosXreal = (fieldData.ballWidth * ballCenterFlat.x) / diameter;
         double ballPosYreal = sqrt(square(distanceToBall) - square(ballPosXreal));
-        Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distanceToBall);
+        //Point3d ballCenter = Point3d(ballPosXreal, ballPosYreal, distanceToBall);
         Point2d centerXY = Point2d(ballPosXreal, ballPosYreal);
         double angleToBall = acos(centerXY.y / distanceToBall) * (180 / CV_PI);
         Point2d change = lastBallPosition - centerXY;
@@ -158,7 +158,7 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
         // store five points here
         // calculate median of first five for first point
         // calculate median of last five for second point
-        return {ballCenterFlat, distanceToBall, ballHeading, radius};
+        return {ballCenterFlat, distanceToBall, angleToBall, ballHeading, ballVelocity, radius};
     }
-    return {{0, 0}, 0, 0, 0};
+    return {};
 }

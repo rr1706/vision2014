@@ -1112,7 +1112,7 @@ void targetDetection(ThreadData &data)
         }
         else
         {
-            targetCase == ALL_INVERTED;
+            targetCase = ALL_INVERTED;
             R[0] = staticTargets[1].realDistance;
             R[4] = dynamicTargets[1].realDistance;
             R[5] = staticTargets[0].realDistance;

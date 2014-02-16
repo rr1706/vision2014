@@ -15,7 +15,7 @@ SolutionLog::SolutionLog(std::string file, std::vector<std::string> columns) : w
 
 bool SolutionLog::open(std::string file, std::vector<std::string> columns)
 {
-    this->file.open(file);
+    this->file.open(file.c_str());
     if (this->file.is_open()) {
         for (std::string column : columns) {
             this->file << column << ",";

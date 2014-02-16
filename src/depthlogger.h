@@ -11,7 +11,7 @@
 
 struct DepthResults {
     cv::Point2f location;
-    double distance, rotation, radius;
+    double distance, angle, rotation, velocity, radius;
 };
 
 class DepthLogger

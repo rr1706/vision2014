@@ -558,8 +558,8 @@ void SelectSolutionForOppositeCorners(double ixl, double iyl, double xsuml, doub
 void FindHeading(double R1, double R2, double R3, double R4, double R5, double R6, double R7, double R8, int arr[3][8])
 {
     int P[4][9];
-    for (uint i = 0; i < 3; i++) {
-        for (uint j = 0; j < 8; j++) {
+    for (unsigned int i = 0; i < 3; i++) {
+        for (unsigned int j = 0; j < 8; j++) {
            P[i + 1][j + 1] = arr[i][j];
         }
     }

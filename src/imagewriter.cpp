@@ -17,22 +17,27 @@ static void mkdir_except(const char* dirname)
 }
 
 ImageWriter::ImageWriter(bool createDirectory, double writeInterval, std::string subdir, std::string dirname)
-    : writeInterval(writeInterval)
+    : lastWrite(clock()), writeInterval(writeInterval)
 {
-    if (dirname.empty())
-        dirname = getDirnameNow();
-    if (createDirectory)
-        mkdir_except(dirname.c_str());
+    if (dirname.empty()) {
+        this->dirname = getDirnameNow();
+    } else {
+        this->dirname = dirname;
+    }
+    if (createDirectory) {
+        mkdir_except(this->dirname.c_str());
+    }
     if (!(subdir == ".")) {
-        dirname += "/" + subdir;
-        if (createDirectory)
-            mkdir_except(dirname.c_str());
+        this->dirname += "/" + subdir;
+        if (createDirectory) { // create subdir
+            mkdir_except(this->dirname.c_str());
+        }
     }
 }
 
 void ImageWriter::writeImage(cv::Mat &image, std::string suffix, bool incrementIndex)
 {
-    if (static_cast<double>(lastWrite - clock()) < writeInterval) return;
+    if (static_cast<double>(clock() - lastWrite) / CLOCKS_PER_SEC < writeInterval) return;
     lastWrite = clock();
     sprintf(imageName, imageNameFormat, dirname.c_str(), imageIndex, suffix.c_str());
     imwrite(imageName, image);
