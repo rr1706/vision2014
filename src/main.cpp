@@ -62,7 +62,7 @@ static const bool USE_POSE = false;
 static const bool STITCH_IMAGES = false;
 
 // Values for threshold IR
-int gray_min = 245;
+int gray_min = 200;
 int gray_max = 255;
 
 // Values for threshold RGB
@@ -84,7 +84,7 @@ uchar ballValMin = color == RED ? 100 : 0;
 uchar ballValMax = color == RED ? 255 : 158;
 const uint ballSidesMin = 5; // for a circle
 const uint ballMinArea = 250;
-double ballRatioMin = 0.6;
+double ballRatioMin = 0.4;
 double ballRatioMax = 0.9;
 
 // for approxpolydp
@@ -267,6 +267,8 @@ int demo()
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
+        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
         data.camera = VideoCapture(videoPath);
         if (!data.camera.isOpened()) {
@@ -296,6 +298,9 @@ int demo()
             data.camera >> img;
         } else {
             img = inframe.clone();
+        }
+        if (cameraId == 0) {
+            cv::flip(img, img, -1);
         }
 
         //Break out of loop if esc is pressed
@@ -438,15 +443,28 @@ int demo()
             }
         }
         writer.writeImage(img);
-        data.image = img;
+        static const int padding = 15;
+        int topPortion = img.rows * (2.0/3);
+        int bottomPortion = img.rows - topPortion;
+        Mat topROI = img.clone(), bottomROI = img.clone();
+        topROI.pop_back(bottomPortion + padding);
+        copyMakeBorder(topROI, topROI, 0, bottomPortion + padding, 0, 0, BORDER_CONSTANT);
+        for (int y = 0; y < topPortion + padding; y++) {
+            for (int x = 0; x < img.cols; x++) {
+                bottomROI.at<Vec3d>(Point(x, y)) = Vec3d(0, 0, 0);
+            }
+        }
         switch (tracking) {
         case BALL:
+            data.image = bottomROI;
             ballDetection(data);
             break;
         case TARGET:
+            data.image = topROI;
             targetDetection(data);
             break;
         case ROBOT:
+            data.image = bottomROI;
             robotDetection(data);
             break;
         }
@@ -906,9 +924,9 @@ void targetDetection(ThreadData &data)
         }
         Moments moment = moments(contour, false);
         Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
-        if (massCenter.y > (IMAGE_HEIGHT * 0.75)) {
-            continue;
-        }
+//        if (massCenter.y > (IMAGE_HEIGHT * 0.75) || massCenter.y < 75) {
+//            continue;
+//        }
         if (!isContourConvex(polygon)) {
             failedConvex++;
             RotatedRect minRect = minAreaRect(contour);
@@ -1004,7 +1022,9 @@ void targetDetection(ThreadData &data)
 
         if (targetType == Target::STATIC) // static target
         {
-            Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / boundRect.height;
+            RotatedRect minRect = minAreaRect(contour);
+
+            Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / minRect.boundingRect().height;
             //  refinedHeight = distance(localCorners[0], localCorners[2]);
             //  flatHeight = localCorners[2].y - localCorners[0].y;        int targetId = 0; // TODO find this, 0-7
 
@@ -1023,6 +1043,8 @@ void targetDetection(ThreadData &data)
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
             sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance), Plane_Distance);
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance), Real_Distance);
+            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
             circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
             circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
             //contour is a tall and skinny one
@@ -1046,11 +1068,11 @@ void targetDetection(ThreadData &data)
 
             sprintf(str, "BRH:%d", boundRect.height);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Dynamic));
+            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance_Dynamic), Plane_Distance_Dynamic);
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance_Dynamic), Real_Distance_Dynamic);
+            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
 
-            circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
-            circle(dst, localCorners[2], 5, Scalar(255, 255, 0), 2, 8, 0);
 
             //contour is the short and wide, dynamic target
             //save off as dynamic target
@@ -1101,19 +1123,19 @@ void targetDetection(ThreadData &data)
         if (staticTargets[0].massCenter.x < dynamicTargets[0].massCenter.x)
         {
             targetCase = ALL;
-            R[0] = staticTargets[0].realDistance;
-            R[4] = dynamicTargets[0].realDistance;
+            R[4] = staticTargets[0].realDistance;
+            R[0] = dynamicTargets[0].realDistance;
             R[5] = staticTargets[1].realDistance;
             R[1] = dynamicTargets[1].realDistance;
-            P[0][0] = staticTargets[0].massCenter.x;
-            P[0][4] = dynamicTargets[0].massCenter.x;
+            P[0][4] = staticTargets[0].massCenter.x;
+            P[0][0] = dynamicTargets[0].massCenter.x;
             P[0][5] = staticTargets[1].massCenter.x;
             P[0][1] = dynamicTargets[1].massCenter.x;
         }
         else
         {
             targetCase = ALL_INVERTED;
-            R[0] = staticTargets[1].realDistance;
+            R[1] = staticTargets[1].realDistance;
             R[4] = dynamicTargets[1].realDistance;
             R[5] = staticTargets[0].realDistance;
             R[1] = dynamicTargets[0].realDistance;
@@ -1122,6 +1144,14 @@ void targetDetection(ThreadData &data)
             P[0][5] = staticTargets[0].massCenter.x;
             P[0][1] = dynamicTargets[0].massCenter.x;
         }
+    } else if (staticTargets.size() == 2 && dynamicTargets.size() == 0) {
+        targetCase = ALL;
+    } else if (staticTargets.size() == 0 && dynamicTargets.size() == 2) {
+        targetCase = ALL;
+    } else if (staticTargets.size() == 2 && dynamicTargets.size() == 1) {
+        targetCase = ALL;
+    } else if (staticTargets.size() == 1 && dynamicTargets.size() == 2) {
+        targetCase = ALL;
     }
     data.pairCase = targetCase;
     double xPos, yPos, heading;
