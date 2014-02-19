@@ -44,11 +44,11 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = DEMO;
+const ProcessingMode procMode = SA;
 const InputSource mode = CAMERA;
-const int cameraId = 0;
+int cameraId = 0;
 const ColorSystem inputType = COLOR;
-TrackMode tracking = BALL;
+TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
@@ -148,7 +148,7 @@ const unsigned int TARGET_POINTS = 4;
 const int CAMERA_OFFSET[CAMERA_COUNT] = {60, 180, 300};
 int robotRotation = 0; // degrees, from alliance wall
 
-const int STATIC_TARGET_IGNORE_THRESHOLD = 120; // inches
+const int STATIC_TARGET_IGNORE_THRESHOLD = 0; // inches
 
 /**
   * List of coordinates in the world per target.
@@ -212,7 +212,7 @@ Mat rotation_vector, translation_vector, rotation_matrix, inverted_rotation_matr
 
 struct ThreadData {
     VideoCapture camera;
-    Mat image, original, targetDetect;
+    Mat image, original, targetDetect, dst;
     vector<Target::Target> targets;
     vector<Target::Target> staticTargets;
     vector<Target::Target> dynamicTargets;
@@ -221,7 +221,7 @@ struct ThreadData {
     std::chrono::high_resolution_clock::time_point lastImageWrite;
     int imageWriteIndex = 0;
     int id = 0;
-    SolutionLog ballLog;
+    SolutionLog ballLog, targetLog;
 };
 
 int demo();
@@ -259,6 +259,7 @@ int dlog()
 
 int demo()
 {
+    clock_t begin = clock();
     ImageWriter writer(true, 1.0, "demo");
     ThreadData data;
     if (mode == CAMERA) {
@@ -287,9 +288,12 @@ int demo()
     if (displayMode != WindowMode::NONE) {
         namedWindow(windowName, CV_WINDOW_NORMAL);
     }
-
+    int frame = 0;
+    data.targetLog.open("target.log", {"time", "frame", "image", "distance", "bound_height"});
+    data.ballLog.open("ball.log", {"time", "img_x", "img_y", "rel_x", "rel_y", "distance", "rotation", "velocity", "heading"});
     while ( 1 )
     {
+        clock_t loop_begin = clock();
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -306,6 +310,10 @@ int demo()
         //Break out of loop if esc is pressed
         switch (char key = waitKey(1)) {
         case KEY_QUIT:
+            data.ballLog.flush();
+            data.targetLog.flush();
+            data.ballLog.close();
+            data.targetLog.close();
             return 0;
             break;
         case KEY_SAVE:
@@ -431,6 +439,18 @@ int demo()
         case 'I':
             currentThreshold = Thresh::IR_MAX;
             break;
+        case ')':
+            cameraId = 0;
+            data.camera.open(0);
+            break;
+        case '!':
+            cameraId = 1;
+            data.camera.open(1);
+            break;
+        case '@':
+            cameraId = 2;
+            data.camera.open(2);
+            break;
         case 'm':
             if (++trackI > ROBOT) trackI = 0;
             tracking = static_cast<TrackMode>(trackI);
@@ -454,14 +474,17 @@ int demo()
                 bottomROI.at<Vec3d>(Point(x, y)) = Vec3d(0, 0, 0);
             }
         }
+        double timeSinceStart = static_cast<double>(loop_begin - begin) / CLOCKS_PER_SEC;
         switch (tracking) {
         case BALL:
             data.image = bottomROI;
             ballDetection(data);
+            data.ballLog.log("frame", frame++).log("time", timeSinceStart).log("image", writer.imageIndex).flush();
             break;
         case TARGET:
             data.image = topROI;
             targetDetection(data);
+            data.targetLog.log("frame", frame++).log("time", timeSinceStart).log("image", writer.imageIndex).flush();
             break;
         case ROBOT:
             data.image = bottomROI;
@@ -494,31 +517,44 @@ int demo()
 
 void runThread(ThreadData *data) {
     data->camera >> data->image;
+    if (data->id == 1) {
+        cv::flip(data->image, data->image, -1);
+    }
     data->original = data->image.clone();
-    Mat targetROI = data->image(Rect(0,0,data->image.cols, data->image.rows * (2.0/3)));
-    data->image = targetROI;
+    static const int padding = 1;
+    int topPortion = data->image.rows * (2.0/3);
+    int bottomPortion = data->image.rows - topPortion;
+    Mat topROI = data->image.clone(), bottomROI = data->image.clone();
+    topROI.pop_back(bottomPortion + padding);
+    copyMakeBorder(topROI, topROI, 0, bottomPortion + padding, 0, 0, BORDER_CONSTANT);
+    for (int y = 0; y < topPortion + padding; y++) {
+        for (int x = 0; x < data->image.cols; x++) {
+            bottomROI.at<Vec3d>(Point(x, y)) = Vec3d(0, 0, 0);
+        }
+    }
+    data->image = topROI;
     targetDetection(*data);
     data->targetDetect = data->image.clone();
-    data->image = data->original.clone();
-    Mat ballROI = data->image(Rect(0,data->image.rows * (2.0/3),data->image.cols, data->image.rows * (1.0/3)));
-    data->image = ballROI;
+    //    data->image = data->original.clone();
+    data->image = bottomROI;
     ballDetection(*data);
 }
 
 int sa()
 {
+    int cameraToDeviceTable[3] = {2, 0, 1};
     ThreadData* threadData[CAMERA_COUNT];
     ImageWriter* writers[CAMERA_COUNT];
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
         threadData[i] = new ThreadData;
+        threadData[i]->id = cameraToDeviceTable[i];
         sprintf(str, "cam_%d", i);
         writers[i] = new ImageWriter(true, 1.0, str);
-        threadData[i]->camera.open(i);
+        threadData[i]->camera.open(cameraToDeviceTable[i]);
         threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
     }
     auto begin = std::chrono::high_resolution_clock::now();
-    sprintf(str, "%s/sa.csv", dirname);
-    SolutionLog saLog(string(str), {"time", "heading", "x", "y"});
+    SolutionLog saLog("sa.csv", {"time", "heading", "x", "y"});
     thread threads[CAMERA_COUNT];
     while (true) {
         auto start = std::chrono::high_resolution_clock::now();
@@ -692,13 +728,14 @@ int sa()
             }
         }
         std::vector<cv::Point3f> dataWorldCoords;
-        int R[8];
+        double R[8] = {0};
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             ThreadData *data = threadData[i];
 
             cout << "Thread " << i << " case: " << data->pairCase << endl;
-            if (data->pairCase == LEFT) {
-                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+            if (data->pairCase == LEFT && data->staticTargets.size() > 0
+                    && data->dynamicTargets.size() > 0) {
+//                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].y] = data->staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data->dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data->staticTargets[0].massCenter.x;
@@ -710,8 +747,9 @@ int sa()
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
                 }
-            } else if (data->pairCase == RIGHT) {
-                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+            } else if (data->pairCase == RIGHT && data->staticTargets.size() > 0
+                       && data->dynamicTargets.size() > 0) {
+//                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].y] = data->staticTargets[0].realDistance;
                 R[targetPair[i][0].x] = data->dynamicTargets[0].realDistance;
                 P[i][targetPair[i][0].y] = data->staticTargets[0].massCenter.x;
@@ -722,11 +760,12 @@ int sa()
                 for (int j = 0; j < 4; j++) {
                     dataWorldCoords.push_back(worldCoords[targetPair[i][0].y][j]);
                 }
-            } else if (data->pairCase == ALL) {
-                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+            } else if (data->pairCase == ALL && data->staticTargets.size() > 1
+                       && data->dynamicTargets.size() > 1) {
+//                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][0].x] = data->staticTargets[0].realDistance;
                 R[targetPair[i][0].y] = data->dynamicTargets[0].realDistance;
-                if (abs(data->staticTargets[1].realDistance - data->dynamicTargets[1].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
+//                if (abs(data->staticTargets[1].realDistance - data->dynamicTargets[1].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
                     R[targetPair[i][1].x] = data->staticTargets[1].realDistance;
                 R[targetPair[i][1].y] = data->dynamicTargets[1].realDistance;
                 P[i][targetPair[i][0].x] = data->staticTargets[0].massCenter.x;
@@ -747,8 +786,13 @@ int sa()
                 }
             }
         }
+        for (int i = 0; i < 8; i++) {
+            if (R[i] < 0) R[i] = 0;
+        }
         double xPos, yPos, heading;
         FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+        printf("FindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f",
+               R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
         if (USE_POSE) {
             cv::Mat rvec(1,3,cv::DataType<double>::type);
             cv::Mat tvec(1,3,cv::DataType<double>::type);
@@ -783,7 +827,9 @@ int sa()
                 imshow(windowName, pano);
             }
         } else /*if (displayMode != WindowMode::NONE)*/ {
-            imshow(windowName, threadData[0]->targetDetect);
+            imshow("cam-zero", threadData[0]->dst);
+            imshow("cam-one", threadData[1]->dst);
+            imshow("cma-two", threadData[2]->dst);
         }
 
         auto finish = std::chrono::high_resolution_clock::now();
@@ -799,17 +845,14 @@ int sa()
 
 void targetDetection(ThreadData &data)
 {
+    cout << "ROWS " << data.image.rows;
     Mat img = data.image.clone();
     int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
     // Store the original image img to the Mat dst
     Mat dst = img.clone();
 
     // Convert image from input to threshold method
-//    if (inputType == IR) {
-        cvtColor(img, img, CV_BGR2GRAY);
-//    } else if (inputType == COLOR) {
-//        cvtColor(img, img, CV_BGR2HSV);
-//    }
+    cvtColor(img, img, CV_BGR2GRAY);
     if (displayMode == WindowMode::RAW) {
         Mat input = img.clone();
         cvtColor(input, input, /*inputType == IR ? */CV_GRAY2RGB/* : CV_HSV2RGB*/);
@@ -821,11 +864,7 @@ void targetDetection(ThreadData &data)
     data.image = img;
 
     // "Threshold" image to pixels in the ranges
-//    if (inputType == IR) {
-        threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
-//    } else if (inputType == COLOR) {
-//        inRange(img, Scalar(hue_min, saturation_min, value_min), Scalar(hue_max, saturation_max, value_max), img);
-//    }
+    threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
     if (displayMode == WindowMode::THRESHOLD) {
         Mat thresh = img.clone();
         cvtColor(thresh, thresh, CV_GRAY2RGB); // binary image at this point
@@ -903,6 +942,7 @@ void targetDetection(ThreadData &data)
         }
     }
     vector<Target::Target> targets, staticTargets, dynamicTargets;
+    TargetCase targetCase = NONE;
 
     // Create a for loop to go through each contour (i) one at a time
     for( unsigned int i = 0; i < contours.size(); i++ )
@@ -924,9 +964,6 @@ void targetDetection(ThreadData &data)
         }
         Moments moment = moments(contour, false);
         Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
-//        if (massCenter.y > (IMAGE_HEIGHT * 0.75) || massCenter.y < 75) {
-//            continue;
-//        }
         if (!isContourConvex(polygon)) {
             failedConvex++;
             RotatedRect minRect = minAreaRect(contour);
@@ -938,8 +975,8 @@ void targetDetection(ThreadData &data)
             double areaRect = width * height;
             double areaContour = contourArea(contour);
             double deadSpace = areaContour / areaRect;
-            if (ratio > 0.7 && ratio < 1.7) continue;
-            if (deadSpace > 0.3) continue;
+            if (ratio > 0.8 && ratio < 1.2 && ratio > 5 && ratio < .1) continue;
+            if (deadSpace > 0.5) continue;
             Rect boundRect = boundingRect(contour);
             rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
             sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
@@ -958,8 +995,13 @@ void targetDetection(ThreadData &data)
             double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
+            if (ratio > 1) {
+                targetCase = LEFT;
+            } else {
+                targetCase = RIGHT;
+            }
 
-            sprintf(str, "PLD:%.2fm", inchesToMeters(Plane_Distance_Combined));
+            sprintf(str, "PLD:%.2fm RTO:%.2f", inchesToMeters(Plane_Distance_Combined), ratio);
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
 
             for (int j = 0; j < 4; j++)
@@ -1017,10 +1059,10 @@ void targetDetection(ThreadData &data)
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
-        Target::Type targetType = (boundRect.height > boundRect.width * 2) ? Target::STATIC : Target::DYNAMIC;
+        Target::Type targetType = (boundRect.height > boundRect.width * 3) ? Target::STATIC : Target::DYNAMIC;
         double planeDistance, realDistance;
 
-        if (targetType == Target::STATIC) // static target
+        if (targetType == Target::STATIC && (boundRect.height < boundRect.width * 6)) // static target
         {
             RotatedRect minRect = minAreaRect(contour);
 
@@ -1051,7 +1093,7 @@ void targetDetection(ThreadData &data)
             //save off as static target
             Static_Target.push_back(contours[i]);
         }
-        else
+        else if (boundRect.width > boundRect.height * 3 && (boundRect.width < boundRect.height * 6))
         {
             if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
                 Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
@@ -1103,8 +1145,7 @@ void targetDetection(ThreadData &data)
     data.targets = targets;
     data.dynamicTargets = dynamicTargets;
     data.staticTargets = staticTargets;
-    TargetCase targetCase = NONE;
-    if (dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2
+    if (targetCase == NONE && dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2
             && staticTargets[0].massCenter.x > dynamicTargets[0].massCenter.x) {
         //case left
         targetCase = LEFT;
@@ -1112,7 +1153,7 @@ void targetDetection(ThreadData &data)
         R[4] = staticTargets[0].realDistance;
         P[0][4] = staticTargets[0].massCenter.x;
         P[0][0] = dynamicTargets[0].massCenter.x;
-    } else if (dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2) {
+    } else if (targetCase == NONE && dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2) {
         //case right
         targetCase = RIGHT;
         R[4] = dynamicTargets[0].realDistance;
@@ -1157,7 +1198,11 @@ void targetDetection(ThreadData &data)
     double xPos, yPos, heading;
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
     // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
-
+    if (staticTargets.size() > 0) {
+        Target::Target target = staticTargets[0];
+        data.targetLog.log("distance", target.planeDistance);
+        data.targetLog.log("bound_height", target.boundRect.height);
+    }
     string caseStr;
     switch (targetCase) {
     case NONE:
@@ -1192,6 +1237,7 @@ void targetDetection(ThreadData &data)
         Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
         imshow(windowName, dst);
     }
+    data.dst = dst;
 }
 
 const double cameraFOV = 117.5; // degrees
@@ -1217,7 +1263,6 @@ void ballDetection(ThreadData &data)
     }
     cvtColor(img,img, CV_BGR2RGB);
     cvtColor(img, img, CV_BGR2HSV);
-//    imshow("hsv", img);
     // Threshold image to
     inRange(img, Scalar(ballHueMin, ballSatMin, ballValMin), Scalar(ballHueMax, ballSatMax, ballValMax), img);
     if (displayMode == WindowMode::THRESHOLD) {
@@ -1377,8 +1422,9 @@ void ballDetection(ThreadData &data)
         // store five points here
         // calculate median of first five for first point
         // calculate median of last five for second point
-//        ballPositions.log("pos_px_x", ballCenterFlat.x).log("pos_px_y", ballCenterFlat.y);
-//        ballPositions.log("distance", distanceToBall).log("rotation", ballHeading);
+        data.ballLog.log("img_x", ballCenterFlat.x).log("img_y", ballCenterFlat.y);
+        data.ballLog.log("rel_x", ballPosXreal).log("rel_y", ballPosYreal);
+        data.ballLog.log("distance", distanceToBall).log("rotation", ballHeading).log("velocity", ballVelocity).log("heading", ballHeading);
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
@@ -1396,12 +1442,6 @@ void ballDetection(ThreadData &data)
 
         udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
     }
-//    if (ballPositions.isOpen()) {
-//        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(timeNow-startTime).count();
-//        ballPositions.log("frame", ballFrameCount).log("time", timeSinceStart).log("image", imageWriteIndex).flush();
-//    } else {
-//        cerr << "Unable to write solutions log" << endl;
-//    }
     lastFrameStart = timeNow;
     ballFrameCount++;
 }
