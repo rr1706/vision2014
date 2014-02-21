@@ -53,7 +53,7 @@ const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(0xC049EE66);
+const QHostAddress udpRecipient(0x0A110602);
 QUdpSocket udpSocket;
 const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
@@ -829,7 +829,7 @@ int sa()
                     + QByteArray::number(threadData[largestBall]->angleToBall) + " "
                     + QByteArray::number(threadData[largestBall]->ballVelocity) + " "
                     + QByteArray::number(threadData[largestBall]->ballHeading);
-            udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
+            udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 80);
         }
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
         saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
