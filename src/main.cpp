@@ -222,6 +222,8 @@ struct ThreadData {
     int imageWriteIndex = 0;
     int id = 0;
     SolutionLog ballLog, targetLog;
+    double distanceToBall, angleToBall, ballHeading, ballVelocity;
+    int ballArea = 0;
 };
 
 int demo();
@@ -806,6 +808,29 @@ int sa()
             Mat t = tvec.t ();
             //        camera_translation_vector = -camera_rotation_vector * t;
         }
+        unsigned int largestBall = 0;
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            if (threadData[i]->ballArea > threadData[largestBall]->ballArea) {
+                largestBall = i;
+            }
+        }
+        if (doUdp) {
+            int whichGoalHot = 0;
+            if (threadData[0]->pairCase == LEFT || threadData[2]->pairCase == LEFT) {
+                whichGoalHot = 0;
+            } else if (threadData[0]->pairCase == RIGHT || threadData[2]->pairCase == RIGHT) {
+                whichGoalHot = 1;
+            }
+            QByteArray datagram = QByteArray::number(xPos) + " "
+                    + QByteArray::number(yPos) + " "
+                    + QByteArray::number(heading) + " "
+                    + QByteArray::number(whichGoalHot) + " "
+                    + QByteArray::number(threadData[largestBall]->distanceToBall) + " "
+                    + QByteArray::number(threadData[largestBall]->angleToBall) + " "
+                    + QByteArray::number(threadData[largestBall]->ballVelocity) + " "
+                    + QByteArray::number(threadData[largestBall]->ballHeading);
+            udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
+        }
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
         saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
         // stitching is broken currently, TODO test on odroid
@@ -1371,6 +1396,7 @@ void ballDetection(ThreadData &data)
     double distanceToBall = 0;
     double ballHeading = 0;
     for (vector<Point> &contour : largestContour) {
+        data.ballArea = contourArea(contour);
         vector<Point> polygon;
         approxPolyDP( contour, polygon, accuracy, true );
         Point2f ballCenterFlat;
@@ -1438,15 +1464,10 @@ void ballDetection(ThreadData &data)
         Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
         imshow(windowName, dst);
     }
-    if (doUdp) {
-        QByteArray datagram = "balltrack "
-                + QByteArray::number(distanceToBall) + " "
-                + QByteArray::number(angleToBall) + " "
-                + QByteArray::number(ballVelocity) + " "
-                + QByteArray::number(ballHeading);
-
-        udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 8888);
-    }
+    data.distanceToBall = distanceToBall;
+    data.angleToBall = angleToBall;
+    data.ballHeading = ballHeading;
+    data.ballVelocity = ballVelocity;
     lastFrameStart = timeNow;
     ballFrameCount++;
 }
