@@ -17,7 +17,7 @@ static void mkdir_except(const char* dirname)
 }
 
 ImageWriter::ImageWriter(bool createDirectory, double writeInterval, std::string subdir, std::string dirname)
-    : lastWrite(clock()), writeInterval(writeInterval)
+    : imageIndex(0), lastWrite(clock()), writeInterval(writeInterval)
 {
     if (dirname.empty()) {
         this->dirname = getDirnameNow();

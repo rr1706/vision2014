@@ -1,0 +1,5 @@
+
+KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", SUBSYSTEMS=="usb", ATTRS{busnum}=="1", SYMLINK+="video17060"
+KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", SUBSYSTEMS=="usb", ATTRS{busnum}=="3", SYMLINK+="video17061"
+KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", SUBSYSTEMS=="usb", ATTRS{busnum}=="5", SYMLINK+="video17062"
+

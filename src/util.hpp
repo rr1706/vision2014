@@ -185,4 +185,11 @@ void applyText(std::vector<std::string> &text, cv::Point startPos, cv::Mat &img)
   */
 void sortTargets(std::vector<Target::Target> &targets);
 
+/**
+ * @brief arrayToIP Convert an array of adress parts to an IP address.
+ * @param adressParts Array containing the .-separated portions of an address as elements.
+ * @return IP address as an integer.
+ */
+int arrayToIP(int addressParts[4]);
+
 #endif // UTIL_HPP

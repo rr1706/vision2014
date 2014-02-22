@@ -84,7 +84,7 @@ std::string xyz(const cv::Point3d p1)
 
 bool isAlmostSquare ( const double ratio )
 {
-    return ( ratio < 3 && ratio > 0.5 );
+    return ( ratio < 3 && ratio > 0.7 );
 }
 
 bool isExtraLong(const double ratio)
@@ -216,5 +216,14 @@ bool thresholdPixel(cv::Scalar pixel, ThresholdDataHSV thresh)
     return h >= thresh.h_min && h <= thresh.h_max
             && s >= thresh.s_min && s <= thresh.s_max
             && v >= thresh.v_min && s <= thresh.v_max;
+}
+
+int arrayToIP(int ipAddress[])
+{
+    int addr = ipAddress[3];
+    addr |= (ipAddress[2] << 8);
+    addr |= (ipAddress[1] << 16);
+    addr |= (ipAddress[0] << 24);
+    return addr;
 }
 

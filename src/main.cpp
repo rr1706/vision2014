@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -53,7 +54,8 @@ const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(0x0A110602);
+const QHostAddress udpRecipient(arrayToIP((int[]){10, 17, 6, 2}));
+const short udpPort = 80;
 QUdpSocket udpSocket;
 const bool saveImages = true;
 const double imageInterval = 1.0; // seconds
@@ -92,10 +94,21 @@ int accuracy = 2; //maximum distance between the original curve and its approxim
 int contourMinArea = 50;
 const float Tan_FOV_Y_Half = 1.46;
 
-const int kern_mat[] = {1,0,1,
+const int kern_mat0[] = {1,0,1,
                         0,1,0,
                         1,0,1};
-const Mat kernel = getStructuringElement(*kern_mat, Size(3,3), Point(-1,-1));
+
+const int kern_mat1[] = {1,1,1,
+                        0,0,0,
+                        1,1,1};
+
+const int kern_mat2[] = {0,0,0,
+                        0,0,0,
+                        1,1,1};
+
+const Mat kernel0 = getStructuringElement(*kern_mat0, Size(3,3), Point(-1,-1));
+const Mat kernel1 = getStructuringElement(*kern_mat1, Size(3,3), Point(-1,-1));
+const Mat kernel2 = getStructuringElement(*kern_mat2, Size(3,3), Point(-1,-1));
 const Size winSize = Size( 5, 5 );
 const Size zeroZone = Size( -1, -1 );
 const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
@@ -519,11 +532,14 @@ int demo()
 
 void runThread(ThreadData *data) {
     data->camera >> data->image;
-    if (data->id == 1) {
+//    cv::pyrDown(data->image, data->image);
+//    cv::pyrDown(data->image, data->image);
+    cv::resize(data->image, data->image, cv::Size(640, 480));
+    if (data->id == 2) {
         cv::flip(data->image, data->image, -1);
     }
     data->original = data->image.clone();
-    static const int padding = 1;
+    static const int padding = 5;
     int topPortion = data->image.rows * (2.0/3);
     int bottomPortion = data->image.rows - topPortion;
     Mat topROI = data->image.clone(), bottomROI = data->image.clone();
@@ -542,21 +558,35 @@ void runThread(ThreadData *data) {
     ballDetection(*data);
 }
 
+ThreadData* threadData[CAMERA_COUNT];
+
 int sa()
 {
-    int cameraToDeviceTable[3] = {2, 0, 1};
-    ThreadData* threadData[CAMERA_COUNT];
+    int cameraToDeviceTable[3] = {0, 1, 2};
     ImageWriter* writers[CAMERA_COUNT];
+    string dirname = getDirnameNow();
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
         threadData[i] = new ThreadData;
         threadData[i]->id = cameraToDeviceTable[i];
         sprintf(str, "cam_%d", i);
-        writers[i] = new ImageWriter(true, 1.0, str);
-        threadData[i]->camera.open(cameraToDeviceTable[i]);
+        writers[i] = new ImageWriter(true, 1.0, str, dirname);
+        sprintf(str, "%s/cam_%d/ball.csv", dirname.c_str(), i);
         threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
+        sprintf(str, "v4l2:///dev/video1706%d", cameraToDeviceTable[i]);
+        threadData[i]->camera.open(str/*cameraToDeviceTable[i]*/);
+//        threadData[i]->camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+//        threadData[i]->camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
     }
+    signal(SIGTERM, [](int signum) {
+        fprintf(stderr, "Abnormal program termination. Closing camera connections...");
+        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+            threadData[i]->camera.release();
+        }
+        fprintf(stderr, " done.\n");
+        exit(signum);
+    });
     auto begin = std::chrono::high_resolution_clock::now();
-    SolutionLog saLog("sa.csv", {"time", "heading", "x", "y"});
+    SolutionLog saLog("sa.csv", {"time", "frame_time", "case_0", "case_1", "case_2", "heading", "x", "y"});
     thread threads[CAMERA_COUNT];
     while (true) {
         auto start = std::chrono::high_resolution_clock::now();
@@ -829,7 +859,7 @@ int sa()
                     + QByteArray::number(threadData[largestBall]->angleToBall) + " "
                     + QByteArray::number(threadData[largestBall]->ballVelocity) + " "
                     + QByteArray::number(threadData[largestBall]->ballHeading);
-            udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, 80);
+            udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, udpPort);
         }
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
         saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
@@ -851,7 +881,7 @@ int sa()
                 Window::print(string(str), pano, Point(5, 15));
                 imshow(windowName, pano);
             }
-        } else /*if (displayMode != WindowMode::NONE)*/ {
+        } else if (true) {
             imshow("cam-zero", threadData[0]->dst);
             imshow("cam-one", threadData[1]->dst);
             imshow("cma-two", threadData[2]->dst);
@@ -934,7 +964,9 @@ void targetDetection(ThreadData &data)
     }
 
     // Get rid of remaining noise
-    morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
+    morphologyEx(img, img, MORPH_OPEN, kernel0, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
+    //erode(img, img, kernel1, Point(-1, -1), 1);
+    //erode(img, img, kernel2, Point(-1, -1), 1);
     if (displayMode == WindowMode::DILATE) {
         Mat dilate = img.clone();
         Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
@@ -1089,10 +1121,17 @@ void targetDetection(ThreadData &data)
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
-        Target::Type targetType = (boundRect.height > boundRect.width * 3) ? Target::STATIC : Target::DYNAMIC;
+        Target::Type targetType;
+        if (boundRect.height > boundRect.width * 2) {
+            targetType = Target::STATIC;
+        } else if (boundRect.width > boundRect.height * 2) {
+            targetType == Target::DYNAMIC;
+        } else {
+            continue;
+        }
         double planeDistance, realDistance;
 
-        if (targetType == Target::STATIC && (boundRect.height < boundRect.width * 6)) // static target
+        if (targetType == Target::STATIC) // static target
         {
             RotatedRect minRect = minAreaRect(contour);
 
@@ -1123,7 +1162,7 @@ void targetDetection(ThreadData &data)
             //save off as static target
             Static_Target.push_back(contours[i]);
         }
-        else if (boundRect.width > boundRect.height * 3 && (boundRect.width < boundRect.height * 6))
+        else if (targetType == Target::DYNAMIC)
         {
             if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
                 Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
@@ -1262,7 +1301,7 @@ void targetDetection(ThreadData &data)
     line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
     line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
     /// Show Images
-    if (displayMode == WindowMode::FINAL) {
+    if (displayMode == WindowMode::FINAL && procMode == DEMO) {
         WindowMode::print(displayMode, dst);
         Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
         imshow(windowName, dst);
@@ -1328,7 +1367,7 @@ void ballDetection(ThreadData &data)
         imshow(windowName, thresh);
     }
     // Get rid of remaining noise
-    morphologyEx(img, img, MORPH_OPEN, kernel, Point(-1, -1), dilations);
+    morphologyEx(img, img, MORPH_OPEN, kernel0, Point(-1, -1), dilations);
     if (displayMode == WindowMode::DILATE) {
         Mat dilate = img.clone();
         cvtColor(dilate, dilate, CV_GRAY2RGB);
@@ -1459,7 +1498,7 @@ void ballDetection(ThreadData &data)
     }
     line(dst, Point(IMAGE_WIDTH / 2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255));
     line(dst, Point(0, IMAGE_HEIGHT / 2), Point(IMAGE_WIDTH, IMAGE_HEIGHT / 2), Scalar(0, 255, 255));
-    if (displayMode == WindowMode::FINAL) {
+    if (displayMode == WindowMode::FINAL && procMode == DEMO) {
         WindowMode::print(displayMode, dst);
         Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
         imshow(windowName, dst);
@@ -1502,7 +1541,7 @@ void robotDetection(ThreadData &data)
     }
     data.image = threshOutput;
     if (displayMode == WindowMode::THRESHOLD) imshow(windowName, data.image);
-    morphologyEx(data.image, data.image, MORPH_OPEN, kernel, Point(-1, -1), dilations);
+    morphologyEx(data.image, data.image, MORPH_OPEN, kernel0, Point(-1, -1), dilations);
     if (displayMode == WindowMode::DILATE) imshow(windowName, data.image);
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
