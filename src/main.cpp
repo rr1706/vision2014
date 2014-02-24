@@ -24,13 +24,10 @@
 #include "xyh.hpp"
 #include "depthlogger.h"
 #include "imagewriter.h"
+#include "data.hpp"
+#include "config.hpp"
 
-#define STATIC_TARGET_HEIGHT  32.25 //in
-#define DYNAMIC_TARGET_HEIGHT 4 //in
-#define COMBINED_TARGET_HEIGHT 35.3 //in
-#define BUMPER_HEIGHT 5 //in
-
-#define DEPTHLOGTEST
+const float BUMPER_HEIGHT = 5;
 
 // OpenCV Namespace
 using namespace cv;
@@ -45,10 +42,9 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-const ProcessingMode procMode = SA;
+ProcessingMode procMode = SA;
 const InputSource mode = CAMERA;
 int cameraId = 0;
-const ColorSystem inputType = COLOR;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
@@ -78,12 +74,12 @@ const int value_max = 255;
 ThresholdDataHSV ballThreshR = {115, 150, 116, 255, 100, 255};
 
 // Values for threshold ball track
-uchar ballHueMin = color == RED ? 115 : 31;
-uchar ballHueMax = color == RED ? 150 : 128;
-uchar ballSatMin = color == RED ? 116 : 92;
-uchar ballSatMax = color == RED ? 255 : 202;
-uchar ballValMin = color == RED ? 100 : 0;
-uchar ballValMax = color == RED ? 255 : 158;
+unsigned char ballHueMin = color == RED ? 115 : 31;
+unsigned char ballHueMax = color == RED ? 150 : 128;
+unsigned char ballSatMin = color == RED ? 116 : 92;
+unsigned char ballSatMax = color == RED ? 255 : 202;
+unsigned char ballValMin = color == RED ? 100 : 0;
+unsigned char ballValMax = color == RED ? 255 : 158;
 const uint ballSidesMin = 5; // for a circle
 const uint ballMinArea = 250;
 double ballRatioMin = 0.4;
@@ -92,7 +88,7 @@ double ballRatioMax = 0.9;
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
 int contourMinArea = 50;
-const float Tan_FOV_Y_Half = 1.46;
+float Tan_FOV_Y_Half = 1.46;
 
 const int kern_mat0[] = {1,0,1,
                         0,1,0,
@@ -106,12 +102,12 @@ const int kern_mat2[] = {0,0,0,
                         0,0,0,
                         1,1,1};
 
-const Mat kernel0 = getStructuringElement(*kern_mat0, Size(3,3), Point(-1,-1));
-const Mat kernel1 = getStructuringElement(*kern_mat1, Size(3,3), Point(-1,-1));
-const Mat kernel2 = getStructuringElement(*kern_mat2, Size(3,3), Point(-1,-1));
-const Size winSize = Size( 5, 5 );
-const Size zeroZone = Size( -1, -1 );
-const TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
+Mat kernel0 = getStructuringElement(*kern_mat0, Size(3,3), Point(-1,-1));
+Mat kernel1 = getStructuringElement(*kern_mat1, Size(3,3), Point(-1,-1));
+Mat kernel2 = getStructuringElement(*kern_mat2, Size(3,3), Point(-1,-1));
+Size winSize = Size( 5, 5 );
+Size zeroZone = Size( -1, -1 );
+TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 );
 
 /**
   * List of tests to be run on the ball to ensure it is valid.
@@ -148,15 +144,13 @@ WindowMode::WindowMode displayMode = WindowMode::FINAL;
 char dirname[255];
 time_t rawtime;
 struct tm* timeinfo;
-const string windowName = "2014";
+string windowName = "2014";
 Thresh::Part currentThreshold = Thresh::HUE_MIN;
 const int CHANGE_THRESH = 5;
 const int CHANGE_AREA = 20;
 const int CHANGE_ACCURACY = 1;
 const int CHANGE_DILATE = 1;
 
-const unsigned int CAMERA_COUNT = 3;
-const unsigned int TARGET_COUNT = 8;
 const unsigned int TARGET_POINTS = 4;
 const int CAMERA_OFFSET[CAMERA_COUNT] = {60, 180, 300};
 int robotRotation = 0; // degrees, from alliance wall
@@ -222,22 +216,6 @@ const vector<vector<Point3d> > worldCoords = {
 const Mat distCoeffs = (Mat_<float>(5,1) << -1.3694165419404972e-01, 2.0525879204942091e-01, 0, 0, -1.3750202297193695e-01);
 const Mat cameraMatrix = (Mat_<float>(3, 3) << 4.3636519036896868e+02 ,0,6.3950000000000000e+02, 0, 4.3636519036896868e+02, 3.5950000000000000e+02, 0,0, 1);
 Mat rotation_vector, translation_vector, rotation_matrix, inverted_rotation_matrix, cw_translate;
-
-struct ThreadData {
-    VideoCapture camera;
-    Mat image, original, targetDetect, dst;
-    vector<Target::Target> targets;
-    vector<Target::Target> staticTargets;
-    vector<Target::Target> dynamicTargets;
-    TargetCase pairCase = NONE;
-    std::chrono::high_resolution_clock::time_point start;
-    std::chrono::high_resolution_clock::time_point lastImageWrite;
-    int imageWriteIndex = 0;
-    int id = 0;
-    SolutionLog ballLog, targetLog;
-    double distanceToBall, angleToBall, ballHeading, ballVelocity;
-    int ballArea = 0;
-};
 
 int demo();
 int sa();
@@ -534,7 +512,7 @@ void runThread(ThreadData *data) {
     data->camera >> data->image;
 //    cv::pyrDown(data->image, data->image);
 //    cv::pyrDown(data->image, data->image);
-    cv::resize(data->image, data->image, cv::Size(640, 480));
+    cv::resize(data->image, data->image, cv::Size(1280, 720));
     if (data->id == 2) {
         cv::flip(data->image, data->image, -1);
     }
@@ -823,7 +801,7 @@ int sa()
         }
         double xPos, yPos, heading;
         FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
-        printf("FindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f",
+        printf("FindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
                R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
         if (USE_POSE) {
             cv::Mat rvec(1,3,cv::DataType<double>::type);
@@ -903,411 +881,6 @@ int sa()
     return 0;
 }
 
-void targetDetection(ThreadData &data)
-{
-    cout << "ROWS " << data.image.rows;
-    Mat img = data.image.clone();
-    int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
-    // Store the original image img to the Mat dst
-    Mat dst = img.clone();
-
-    // Convert image from input to threshold method
-    cvtColor(img, img, CV_BGR2GRAY);
-    if (displayMode == WindowMode::RAW) {
-        Mat input = img.clone();
-        cvtColor(input, input, /*inputType == IR ? */CV_GRAY2RGB/* : CV_HSV2RGB*/);
-        Window::print("Ratchet Rockers 1706", input, Point(IMAGE_WIDTH - 200, 15));
-        sprintf(str, "Input Mode = %s", inputType == IR ? "IR" : "Color");
-        putText(input, str, Point(5,15), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-        imshow(windowName, input);
-    }
-    data.image = img;
-
-    // "Threshold" image to pixels in the ranges
-    threshold(img, img, gray_min, gray_max, CV_THRESH_BINARY);
-    if (displayMode == WindowMode::THRESHOLD) {
-        Mat thresh = img.clone();
-        cvtColor(thresh, thresh, CV_GRAY2RGB); // binary image at this point
-        Window::print("Ratchet Rockers 1706", thresh, Point(IMAGE_WIDTH - 200, 15));
-        sprintf(str, "%d - Threshold", displayMode);
-        Window::print(string(str), thresh, Point(5, 15));
-        int curThreshVal;
-        switch (currentThreshold) {
-        case Thresh::HUE_MIN:
-            curThreshVal = ballHueMin;
-            break;
-        case Thresh::HUE_MAX:
-            curThreshVal = ballHueMax;
-            break;
-        case Thresh::SAT_MIN:
-            curThreshVal = ballSatMin;
-            break;
-        case Thresh::SAT_MAX:
-            curThreshVal = ballSatMax;
-            break;
-        case Thresh::VAL_MIN:
-            curThreshVal = ballValMin;
-            break;
-        case Thresh::VAL_MAX:
-            curThreshVal = ballValMax;
-            break;
-        case Thresh::IR_MIN:
-            curThreshVal = gray_min;
-            break;
-        case Thresh::IR_MAX:
-            curThreshVal = gray_max;
-            break;
-        }
-        sprintf(str, "%s: %d", Thresh::str(currentThreshold).c_str(), curThreshVal);
-        Window::print(string(str), thresh, Point(5, 30));
-        imshow(windowName, thresh);
-    }
-
-    // Get rid of remaining noise
-    morphologyEx(img, img, MORPH_OPEN, kernel0, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
-    //erode(img, img, kernel1, Point(-1, -1), 1);
-    //erode(img, img, kernel2, Point(-1, -1), 1);
-    if (displayMode == WindowMode::DILATE) {
-        Mat dilate = img.clone();
-        Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
-        sprintf(str, "%d - Dilate", displayMode);
-        putText(dilate, str, Point(5,15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255,0,255),1,8,false);
-        imshow(windowName, dilate);
-    }
-
-    // Declare containers for contours and contour heirarchy
-    vector<vector<Point> > contours;
-    vector<Point2f> corners;
-    vector<vector<Point> > Static_Target;
-    vector<vector<Point> > Dynamic_Target;
-    vector<Vec4i> hierarchy;
-
-
-    findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
-
-    vector<string> statusText;
-    int totalContours = contours.size();
-    int failedArea = 0;
-    int failedHierarchy = 0;
-    int failedSides = 0;
-    int failedConvex = 0;
-    int failedSquare = 0;
-    int failedVLarge = 0;
-    int success = 0;
-    double Image_Heigh_in = 0.0;
-    Mat contoursImg = Mat::zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8U);
-    double R[8] = {0};
-    int P[CAMERA_COUNT][TARGET_COUNT];
-    for (uint pi = 0; pi < CAMERA_COUNT; pi++) {
-        for (uint pj = 0; pj < TARGET_COUNT; pj++) {
-            P[pi][pj] = -1;
-        }
-    }
-    vector<Target::Target> targets, staticTargets, dynamicTargets;
-    TargetCase targetCase = NONE;
-
-    // Create a for loop to go through each contour (i) one at a time
-    for( unsigned int i = 0; i < contours.size(); i++ )
-    {
-        vector<Point> contour = contours[i];
-        // Very small contours (noise)
-        if (contourArea(contour) < contourMinArea) {
-            failedArea++;
-            continue;
-        }
-        if (displayMode == WindowMode::CONTOURS) {
-            drawContours(contoursImg, contours, i, Scalar(255, 255, 0));
-        }
-        vector<Point> polygon;
-        approxPolyDP( contour, polygon, accuracy, true );
-        vector<vector<Point> > contoursDrawWrapper {polygon};
-        if (displayMode == WindowMode::APPROXPOLY) {
-            drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
-        }
-        Moments moment = moments(contour, false);
-        Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
-        if (!isContourConvex(polygon)) {
-            failedConvex++;
-            RotatedRect minRect = minAreaRect(contour);
-            Point2f rect_points[4];
-            minRect.points(rect_points);
-            double width = distance(rect_points[2], rect_points[3]);
-            double height = distance(rect_points[2], rect_points[1]);
-            double ratio = width / height;
-            double areaRect = width * height;
-            double areaContour = contourArea(contour);
-            double deadSpace = areaContour / areaRect;
-            if (ratio > 0.8 && ratio < 1.2 && ratio > 5 && ratio < .1) continue;
-            if (deadSpace > 0.5) continue;
-            Rect boundRect = boundingRect(contour);
-            rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
-            sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
-            Window::print(string(str), dst, rect_points[2]);
-            sprintf(str, "H:%.2f HBR:%d", height, boundRect.height);
-            Window::print(string(str), dst, rect_points[1]);
-            sprintf(str, "W:%f R:%f", width, ratio);
-            Window::print(string(str), dst, rect_points[3]);
-
-            int centerX = boundRect.x + boundRect.width / 2;
-            int centerY = boundRect.y + boundRect.height / 2;
-            Point2i center = {centerX, centerY};
-
-            Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
-            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
-            if (ratio > 1) {
-                targetCase = LEFT;
-            } else {
-                targetCase = RIGHT;
-            }
-
-            sprintf(str, "PLD:%.2fm RTO:%.2f", inchesToMeters(Plane_Distance_Combined), ratio);
-            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-
-            for (int j = 0; j < 4; j++)
-                line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 255),2, 8);
-            Moments moment = moments(contour, false);
-            Point2i fakeDynamicCenter = boundRect.tl() + Point2i(boundRect.width / 2, 0);
-            Point2i fakeStaticCenter = boundRect.tl() + Point2i(0, boundRect.height / 2);
-            // lie about the values a little bit
-            // TODO fake values for the corners
-            Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect};
-            Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect};
-            targets.push_back(fakeDynamic);
-            targets.push_back(fakeStatic);
-            staticTargets.push_back(fakeStatic);
-            dynamicTargets.push_back(fakeDynamic);
-            continue;
-        }
-        if (false && polygon.size() != 4) {
-            failedSides++;
-            continue;
-        }
-        Rect boundRect = boundingRect(polygon);
-        RotatedRect minRect = minAreaRect( Mat(contour));
-        Point2f rect_points[4];
-        minRect.points(rect_points);
-        for (int j = 0; j < 4; j++)
-            line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 0),2, 8);
-
-        // ratio helps determine orientation of rectangle (vertical / horizontal)
-        double ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);
-        if (isAlmostSquare(ratio)) {
-            failedSquare++;
-            continue; // go to next contour
-        } else if (isExtraLong(ratio)) {
-            failedVLarge++;
-            continue;
-        }
-
-        vector<Point2f> localCorners;
-        for (int k = 0; k < 4; k++)
-        {
-            localCorners.push_back(polygon[k]);
-        }
-
-        // organize corners
-        T2B_L2R(localCorners);
-
-        // Calculate the refined corner locations
-        cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
-        T2B_L2R(localCorners);
-        corners.insert(corners.end(), localCorners.begin(), localCorners.end());
-
-        // test aspect ratio
-        success++;
-        int centerX = boundRect.x + boundRect.width / 2;
-        int centerY = boundRect.y + boundRect.height / 2;
-        Point2i center = {centerX, centerY};
-        Target::Type targetType;
-        if (boundRect.height > boundRect.width * 2) {
-            targetType = Target::STATIC;
-        } else if (boundRect.width > boundRect.height * 2) {
-            targetType == Target::DYNAMIC;
-        } else {
-            continue;
-        }
-        double planeDistance, realDistance;
-
-        if (targetType == Target::STATIC) // static target
-        {
-            RotatedRect minRect = minAreaRect(contour);
-
-            Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / minRect.boundingRect().height;
-            //  refinedHeight = distance(localCorners[0], localCorners[2]);
-            //  flatHeight = localCorners[2].y - localCorners[0].y;        int targetId = 0; // TODO find this, 0-7
-
-            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
-            planeDistance = Plane_Distance;
-            realDistance = Real_Distance;
-
-            if (Plane_Distance < 5) {
-                continue;
-            }
-
-            sprintf(str, "BRH:%d", boundRect.height);
-            putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance), Plane_Distance);
-            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance), Real_Distance);
-            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
-            circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
-            //contour is a tall and skinny one
-            //save off as static target
-            Static_Target.push_back(contours[i]);
-        }
-        else if (targetType == Target::DYNAMIC)
-        {
-            if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
-                Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
-            double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle_Dynamic = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
-            planeDistance = Plane_Distance_Dynamic;
-            realDistance = Real_Distance_Dynamic;
-
-            if (Plane_Distance_Dynamic < 5) {
-                continue;
-            }
-
-            sprintf(str, "BRH:%d", boundRect.height);
-            putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance_Dynamic), Plane_Distance_Dynamic);
-            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance_Dynamic), Real_Distance_Dynamic);
-            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-
-
-            //contour is the short and wide, dynamic target
-            //save off as dynamic target
-            Dynamic_Target.push_back(contours[i]);
-        }
-
-        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, localCorners};
-        targets.push_back(target);
-        if (targetType == Target::STATIC) {
-            staticTargets.push_back(target);
-        } else {
-            dynamicTargets.push_back(target);
-        }
-        if (displayMode == WindowMode::PASS) {
-            drawContours(contoursImg, contoursDrawWrapper, 0, Scalar(255, 255, 0));
-        }
-    }
-    if (displayMode == WindowMode::CONTOURS || displayMode == WindowMode::APPROXPOLY || displayMode == WindowMode::PASS) {
-        WindowMode::print(displayMode, contoursImg);
-        Window::print("Ratchet Rockers 1706", contoursImg, Point(IMAGE_WIDTH - 200, 15));
-        imshow(windowName, contoursImg);
-    }
-    cout << "Total: " << totalContours << " | Failures Area: " << failedArea << " Hierarchy: " << failedHierarchy <<
-            " Sides: " << failedSides << " Convex: " << failedConvex << " Square: " << failedSquare << " VeryLarge: " << failedVLarge << " | Success: " << success << endl;
-    sortTargets(targets);
-    sortTargets(dynamicTargets);
-    sortTargets(staticTargets);
-    data.targets = targets;
-    data.dynamicTargets = dynamicTargets;
-    data.staticTargets = staticTargets;
-    if (targetCase == NONE && dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2
-            && staticTargets[0].massCenter.x > dynamicTargets[0].massCenter.x) {
-        //case left
-        targetCase = LEFT;
-        R[0] = dynamicTargets[0].realDistance;
-        R[4] = staticTargets[0].realDistance;
-        P[0][4] = staticTargets[0].massCenter.x;
-        P[0][0] = dynamicTargets[0].massCenter.x;
-    } else if (targetCase == NONE && dynamicTargets.size() > 0 && staticTargets.size() > 0 && targets.size() == 2) {
-        //case right
-        targetCase = RIGHT;
-        R[4] = dynamicTargets[0].realDistance;
-        R[0] = staticTargets[0].realDistance;
-        P[0][4] = staticTargets[0].massCenter.x;
-        P[0][0] = dynamicTargets[0].massCenter.x;
-    } else if (staticTargets.size() >= 2 && dynamicTargets.size() >= 2) {
-        if (staticTargets[0].massCenter.x < dynamicTargets[0].massCenter.x)
-        {
-            targetCase = ALL;
-            R[4] = staticTargets[0].realDistance;
-            R[0] = dynamicTargets[0].realDistance;
-            R[5] = staticTargets[1].realDistance;
-            R[1] = dynamicTargets[1].realDistance;
-            P[0][4] = staticTargets[0].massCenter.x;
-            P[0][0] = dynamicTargets[0].massCenter.x;
-            P[0][5] = staticTargets[1].massCenter.x;
-            P[0][1] = dynamicTargets[1].massCenter.x;
-        }
-        else
-        {
-            targetCase = ALL_INVERTED;
-            R[1] = staticTargets[1].realDistance;
-            R[4] = dynamicTargets[1].realDistance;
-            R[5] = staticTargets[0].realDistance;
-            R[1] = dynamicTargets[0].realDistance;
-            P[0][0] = staticTargets[1].massCenter.x;
-            P[0][4] = dynamicTargets[1].massCenter.x;
-            P[0][5] = staticTargets[0].massCenter.x;
-            P[0][1] = dynamicTargets[0].massCenter.x;
-        }
-    } else if (staticTargets.size() == 2 && dynamicTargets.size() == 0) {
-        targetCase = ALL;
-    } else if (staticTargets.size() == 0 && dynamicTargets.size() == 2) {
-        targetCase = ALL;
-    } else if (staticTargets.size() == 2 && dynamicTargets.size() == 1) {
-        targetCase = ALL;
-    } else if (staticTargets.size() == 1 && dynamicTargets.size() == 2) {
-        targetCase = ALL;
-    }
-    data.pairCase = targetCase;
-    double xPos, yPos, heading;
-    FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
-    // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
-    if (staticTargets.size() > 0) {
-        Target::Target target = staticTargets[0];
-        data.targetLog.log("distance", target.planeDistance);
-        data.targetLog.log("bound_height", target.boundRect.height);
-    }
-    string caseStr;
-    switch (targetCase) {
-    case NONE:
-        caseStr = "None";
-        break;
-    case LEFT:
-        caseStr = "Left";
-        break;
-    case RIGHT:
-        caseStr = "Right";
-        break;
-    case ALL:
-        caseStr = "Both";
-        break;
-    }
-
-    sprintf(str, "Case = %s", caseStr.c_str());
-    putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Targets S:%ld D:%ld", (long) staticTargets.size(), (long) dynamicTargets.size());
-    putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
-    putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Heading %f xR %f yR %f", heading, xPos, yPos);
-    putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    applyText(statusText, Point(5, 90), dst);
-    //draw crosshairs
-    line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
-    line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
-    /// Show Images
-    if (displayMode == WindowMode::FINAL && procMode == DEMO) {
-        WindowMode::print(displayMode, dst);
-        Window::print("Ratchet Rockers 1706", dst, Point(IMAGE_WIDTH - 200, 15));
-        imshow(windowName, dst);
-    }
-    data.dst = dst;
-}
 
 const double cameraFOV = 117.5; // degrees
 const double ballWidth = 0.6096; // meters
@@ -1321,7 +894,6 @@ void ballDetection(ThreadData &data)
 {
     Mat img = data.image;
     int IMAGE_WIDTH = img.cols, IMAGE_HEIGHT = img.rows;
-    assert(inputType == COLOR); // Ball can only be detected on color image
     auto timeNow = std::chrono::high_resolution_clock::now();
     double timeSinceLastFrame = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(timeNow-lastFrameStart).count()) / 1000000000.0;
     Mat dst = img.clone();

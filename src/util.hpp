@@ -40,11 +40,6 @@ enum TargetCase {
     ALL_INVERTED = ALL // TODO make this actually have an effect
 };
 
-enum ColorSystem {
-    IR = 0,
-    COLOR = 1
-};
-
 enum TrackMode {
     TARGET = 0,
     BALL = 1,

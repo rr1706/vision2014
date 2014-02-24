@@ -23,7 +23,8 @@ SOURCES += \
     main.cpp \
     depthlogger.cpp \
     depthtools.cpp \
-    imagewriter.cpp
+    imagewriter.cpp \
+    target.cpp
 
 LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui #`pkg-config --libs opencv`
 QMAKE_CXXFLAGS += -std=c++0x -I/usr/include/ni
@@ -34,4 +35,7 @@ HEADERS += \
     xyh.hpp \
     depthlogger.h \
     depthtools.h \
-    imagewriter.h
+    imagewriter.h \
+    data.hpp \
+    detection.hpp \
+    config.hpp
