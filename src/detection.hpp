@@ -9,4 +9,6 @@ void ballDetection(ThreadData &data);
 
 void robotDetection(ThreadData &data);
 
+extern std::vector<BallTest> ballTests;
+
 #endif // DETECTION_HPP

@@ -22,5 +22,7 @@ extern float Tan_FOV_Y_Half; // evil magic number that works, not actually tan(f
 extern cv::Size winSize, zeroZone;
 extern cv::TermCriteria criteria;
 extern ProcessingMode procMode;
+extern unsigned int ballMinArea, ballSidesMin;
+extern double ballRatioMin, ballRatioMax;
 
 #endif // CONFIG_HPP

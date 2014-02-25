@@ -302,7 +302,7 @@ void targetDetection(ThreadData &data)
             Dynamic_Target.push_back(contours[i]);
         }
 
-        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, localCorners};
+        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect};
         targets.push_back(target);
         if (targetType == Target::STATIC) {
             staticTargets.push_back(target);

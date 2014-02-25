@@ -24,4 +24,12 @@ struct ThreadData {
     int ballArea = 0;
 };
 
+const struct {
+    cv::Point2d fieldOfView;
+} cameraInfo = {{111.426, 79}};
+
+const struct {
+    double ballWidth;
+} fieldData = {0.6096};
+
 #endif // DATA_HPP

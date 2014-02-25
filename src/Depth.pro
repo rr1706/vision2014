@@ -24,7 +24,9 @@ SOURCES += \
     depthlogger.cpp \
     depthtools.cpp \
     imagewriter.cpp \
-    target.cpp
+    target.cpp \
+    ball.cpp \
+    robot.cpp
 
 LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui #`pkg-config --libs opencv`
 QMAKE_CXXFLAGS += -std=c++0x -I/usr/include/ni

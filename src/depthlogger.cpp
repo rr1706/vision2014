@@ -5,6 +5,8 @@
 #include "util.hpp"
 #include "imagewriter.h"
 #include "depthtools.h"
+#include "data.hpp"
+#include "detection.hpp"
 using namespace std;
 using namespace cv;
 
@@ -160,5 +162,5 @@ DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
         // calculate median of last five for second point
         return {ballCenterFlat, distanceToBall, angleToBall, ballHeading, ballVelocity, radius};
     }
-    return {};
+    return {{0, 0}, 0, 0, 0, 0, 0};
 }

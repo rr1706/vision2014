@@ -7,14 +7,6 @@
 #include <vector>
 #include <deque>
 
-struct {
-    cv::Point2d fieldOfView;
-} cameraInfo = {{111.426, 79}};
-
-struct {
-    double ballWidth;
-} fieldData = {0.6096};
-
 struct ThresholdDataHSV {
     unsigned char h_min, h_max, s_min, s_max, v_min, v_max;
 };
@@ -66,7 +58,6 @@ namespace Target {
         cv::Point2i rectCenter;
         cv::Rect boundRect;
         cv::RotatedRect areaRect;
-        std::vector<cv::Point2f> corners;
     };
 }
 
@@ -110,11 +101,6 @@ struct BallTest {
     std::string name;
     ContourConstraint check;
 };
-
-/**
-  * List of tests to be run on the ball to ensure it is valid.
-  */
-extern std::vector<BallTest> ballTests;
 
 template<class T>
 T square ( T x )
