@@ -71,6 +71,9 @@ const int saturation_max = 255;
 const int value_min = 140;
 const int value_max = 255;
 
+bool SAVE_IMAGES = false;
+bool SAVE_LOGS = true;
+
 ThresholdDataHSV ballThreshR = {115, 150, 116, 255, 100, 255};
 
 // Values for threshold ball track
@@ -87,7 +90,7 @@ double ballRatioMax = 0.9;
 
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
-int contourMinArea = 50;
+int contourMinArea = 5;
 float Tan_FOV_Y_Half = 1.46;
 
 const int kern_mat0[] = {1,0,1,
@@ -487,7 +490,7 @@ void runThread(ThreadData *data) {
     data->camera >> data->image;
 //    cv::pyrDown(data->image, data->image);
 //    cv::pyrDown(data->image, data->image);
-    cv::resize(data->image, data->image, cv::Size(1280, 720));
+    cv::resize(data->image, data->image, resolution);
     if (data->id == 2) {
         cv::flip(data->image, data->image, -1);
     }
@@ -518,17 +521,24 @@ int sa()
     int cameraToDeviceTable[3] = {0, 1, 2};
     ImageWriter* writers[CAMERA_COUNT];
     string dirname = getDirnameNow();
+    mkdir(dirname.c_str(), 0755);
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
         threadData[i] = new ThreadData;
         threadData[i]->id = cameraToDeviceTable[i];
+        sprintf(str, "%s/cam_%d", dirname.c_str(), i);
+        mkdir(str, 0755);
         sprintf(str, "cam_%d", i);
-        writers[i] = new ImageWriter(true, 1.0, str, dirname);
-        sprintf(str, "%s/cam_%d/ball.csv", dirname.c_str(), i);
-        threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
+        if (SAVE_IMAGES) {
+            writers[i] = new ImageWriter(false, 1.0, str, dirname);
+        }
+        if (SAVE_LOGS) {
+            sprintf(str, "%s/cam_%d/ball.csv", dirname.c_str(), i);
+            threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
+            sprintf(str, "%s/cam_%d/target.csv", dirname.c_str(), i);
+            threadData[i]->targetLog.open(str, {"frame", "time", "image", "distance", "bound_height"});
+        }
         sprintf(str, "v4l2:///dev/video1706%d", cameraToDeviceTable[i]);
-        threadData[i]->camera.open(str/*cameraToDeviceTable[i]*/);
-//        threadData[i]->camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
-//        threadData[i]->camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+        threadData[i]->camera.open(str);
     }
     signal(SIGTERM, [](int signum) {
         fprintf(stderr, "Abnormal program termination. Closing camera connections...");
@@ -541,7 +551,7 @@ int sa()
     auto begin = std::chrono::high_resolution_clock::now();
     SolutionLog saLog("sa.csv", {"time", "frame_time", "case_0", "case_1", "case_2", "heading", "x", "y"});
     thread threads[CAMERA_COUNT];
-    while (true) {
+    for (unsigned int frame = 0;; frame++) {
         auto start = std::chrono::high_resolution_clock::now();
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             threadData[i]->start = start;
@@ -550,9 +560,22 @@ int sa()
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             if (threads[i].joinable())
                 threads[i].join();
-        }        
+        }
+        double timeSinceStart = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-            writers[i]->writeImage(threadData[i]->original);
+            if (SAVE_IMAGES) {
+                writers[i]->writeImage(threadData[i]->original);
+            }
+            if (SAVE_LOGS) {
+                threadData[i]->ballLog.log("frame", frame).log("time", timeSinceStart);
+                threadData[i]->targetLog.log("frame", frame).log("time", timeSinceStart);
+                if (SAVE_IMAGES) {
+                    threadData[i]->ballLog.log("image", writers[i]->imageIndex).flush();
+                    threadData[i]->targetLog.log("image", writers[i]->imageIndex).flush();
+                }
+                threadData[i]->ballLog.flush();
+                threadData[i]->targetLog.flush();
+            }
         }
         Point2i targetPair[CAMERA_COUNT][2] = {{Point2i(0, 0)}};
         if (threadData[2]->pairCase == LEFT) {

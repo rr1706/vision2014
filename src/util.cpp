@@ -97,6 +97,11 @@ double inchesToMeters(const double inches)
     return inches * 0.0254;
 }
 
+double metersToInches(const double meters)
+{
+    return meters * 100 / 2.54;
+}
+
 const std::string passesTests(
         std::vector<cv::Point> &contour,
         std::vector<BallTest> &ballTests)

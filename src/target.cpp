@@ -72,8 +72,8 @@ void targetDetection(ThreadData &data)
 
     // Get rid of remaining noise
     morphologyEx(img, img, MORPH_OPEN, kernel0, Point(-1, -1), dilations); // note replaced with open, idk if it will work here
-    erode(img, img, kernel1, Point(-1, -1), 1);
-    erode(img, img, kernel2, Point(-1, -1), 1);
+    //erode(img, img, kernel1, Point(-1, -1), 1);
+    //erode(img, img, kernel2, Point(-1, -1), 1);
     if (displayMode == WindowMode::DILATE) {
         Mat dilate = img.clone();
         Window::print("Ratchet Rockers 1706", dilate, Point(IMAGE_WIDTH - 200, 15));
@@ -148,12 +148,6 @@ void targetDetection(ThreadData &data)
             if (deadSpace > 0.5) continue;
             Rect boundRect = boundingRect(contour);
             rectangle( dst, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0), 2, 8, 0 );
-            sprintf(str, "AC:%.2f AR:%.2f D:%.2f", areaContour, areaRect, areaContour / areaRect);
-//            Window::print(string(str), dst, rect_points[2]);
-            sprintf(str, "H:%.2f HBR:%d", height, boundRect.height);
-//            Window::print(string(str), dst, rect_points[1]);
-            sprintf(str, "W:%f R:%f", width, ratio);
-//            Window::print(string(str), dst, rect_points[3]);
 
             int centerX = boundRect.x + boundRect.width / 2;
             int centerY = boundRect.y + boundRect.height / 2;
@@ -255,8 +249,14 @@ void targetDetection(ThreadData &data)
             double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+            double modifiedReal = Real_Distance;
+            if (Real_Distance > 149) {
+                modifiedReal = Real_Distance + metersToInches(0.72583);
+            } else {
+                modifiedReal = Real_Distance + metersToInches(0.216);
+            }
             planeDistance = Plane_Distance;
-            realDistance = Real_Distance;
+            realDistance = modifiedReal;
 
             if (Plane_Distance < 5) {
                 continue;
@@ -264,10 +264,8 @@ void targetDetection(ThreadData &data)
 
             sprintf(str, "H:%d W:%d", boundRect.height, boundRect.width);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(100, 100, 255));
-            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance), Plane_Distance);
+            sprintf(str, "P:%.2fm R:%.2f M:%.2f", inchesToMeters(Plane_Distance), inchesToMeters(Real_Distance), inchesToMeters(modifiedReal));
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance), Real_Distance);
-            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
             circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
             circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
             //contour is a tall and skinny one
@@ -291,10 +289,8 @@ void targetDetection(ThreadData &data)
 
             sprintf(str, "BRH:%d", boundRect.height);
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "PLD:%.2fm %fin", inchesToMeters(Plane_Distance_Dynamic), Plane_Distance_Dynamic);
+            sprintf(str, "P:%.2fm R:%.2f M:%.2f", inchesToMeters(Plane_Distance_Dynamic), inchesToMeters(Real_Distance_Dynamic), 0.0);
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            sprintf(str, "RLD:%.2fm %fin", inchesToMeters(Real_Distance_Dynamic), Real_Distance_Dynamic);
-            putText(dst, str, center + Point2i(0, 30), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
 
 
             //contour is the short and wide, dynamic target

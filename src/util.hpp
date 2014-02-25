@@ -126,6 +126,8 @@ bool isExtraLong(const double ratio);
 
 double inchesToMeters(const double inches);
 
+double metersToInches(const double meters);
+
 /**
  * @brief thresholdPixel Threshold pixel with HSV data
  * @param pixel HSV scalar from the image Mat
