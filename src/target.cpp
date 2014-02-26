@@ -158,14 +158,17 @@ void targetDetection(ThreadData &data)
             double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
+            double Mod_Real_Distance = 0;
+            if (Center_Static_X > 0)
+                Mod_Real_Distance = Real_Distance + metersToInches(.5);
             if (ratio > 1) {
                 targetCase = LEFT;
             } else {
                 targetCase = RIGHT;
             }
 
-            sprintf(str, "PLD:%.2fm RTO:%.2f", inchesToMeters(Plane_Distance_Combined), ratio);
-            putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
+            sprintf(str, "PLD:%.2fm RTO:%.2f CSX:%.2f", inchesToMeters(Plane_Distance_Combined), inchesToMeters(Real_Distance), inchesToMeters(Mod_Real_Distance));
+            putText(dst, str, center + Point2i(-150, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
 
             for (int j = 0; j < 4; j++)
                 line(dst, rect_points[j], rect_points[(j+1)%4], Scalar(0, 255, 255),2, 8);
@@ -208,20 +211,6 @@ void targetDetection(ThreadData &data)
             failedVLarge++;
             continue;
         }
-
-        vector<Point2f> localCorners;
-        for (int k = 0; k < 4; k++)
-        {
-            localCorners.push_back(polygon[k]);
-        }
-
-        // organize corners
-        T2B_L2R(localCorners);
-
-        // Calculate the refined corner locations
-        cornerSubPix(img, localCorners, winSize, zeroZone, criteria);
-        T2B_L2R(localCorners);
-        corners.insert(corners.end(), localCorners.begin(), localCorners.end());
 
         // test aspect ratio
         success++;
@@ -266,8 +255,6 @@ void targetDetection(ThreadData &data)
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(100, 100, 255));
             sprintf(str, "P:%.2fm R:%.2f M:%.2f", inchesToMeters(Plane_Distance), inchesToMeters(Real_Distance), inchesToMeters(modifiedReal));
             putText(dst, str, center + Point2i(0, 15), CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(255, 100, 100));
-            circle(dst, localCorners[0], 5, Scalar(0, 255, 255), 2, 8, 0);
-            circle(dst, localCorners[2], 5, Scalar(100, 255, 200), 2, 8, 0);
             //contour is a tall and skinny one
             //save off as static target
             Static_Target.push_back(contours[i]);
@@ -406,8 +393,8 @@ void targetDetection(ThreadData &data)
     putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     applyText(statusText, Point(5, 90), dst);
     //draw crosshairs
-    line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
-    line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
+    //line(dst, Point( IMAGE_WIDTH/2, 0), Point(IMAGE_WIDTH / 2, IMAGE_HEIGHT), Scalar(0, 255, 255), 1, 8, 0);
+    //line(dst, Point( 0, IMAGE_HEIGHT/2), Point(IMAGE_WIDTH, IMAGE_HEIGHT/2), Scalar(0, 255, 255), 1, 8, 0);
     /// Show Images
     if (displayMode == WindowMode::FINAL && procMode == DEMO) {
         WindowMode::print(displayMode, dst);
