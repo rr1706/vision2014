@@ -22,6 +22,7 @@ struct ThreadData {
     SolutionLog ballLog, targetLog;
     double distanceToBall, angleToBall, ballHeading, ballVelocity;
     int ballArea = 0;
+    double robotISA = -99;
 };
 
 const struct {

@@ -3,7 +3,8 @@
 
 int main()
 {
-	if (testFindXYH() != 0) return 1;
+//	if (testFindXYH() != 0) return 1;
 //	if (testFindTarget() != 0) return 1;
+	if (testArrayToIP() != 0) return 1;
 	return 0;
 }

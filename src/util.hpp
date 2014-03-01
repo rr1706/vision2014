@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <deque>
+#include <string.h>
 
 struct ThresholdDataHSV {
     unsigned char h_min, h_max, s_min, s_max, v_min, v_max;
@@ -58,6 +59,7 @@ namespace Target {
         cv::Point2i rectCenter;
         cv::Rect boundRect;
         cv::RotatedRect areaRect;
+        double inScreenAngle;
     };
 }
 
@@ -173,6 +175,6 @@ void sortTargets(std::vector<Target::Target> &targets);
  * @param adressParts Array containing the .-separated portions of an address as elements.
  * @return IP address as an integer.
  */
-int arrayToIP(int addressParts[4]);
+int arrayToIP(const char* addrStr);
 
 #endif // UTIL_HPP

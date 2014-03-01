@@ -4,13 +4,8 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
-#include <iomanip>
 #include <ctime>
-#include <map>
-#include <vector>
-#include <deque>
 #include <thread>
-#include <atomic>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/stitching/stitcher.hpp>
@@ -44,13 +39,13 @@ const char KEY_SPEED = ' ';
 // config
 ProcessingMode procMode = SA;
 const InputSource mode = CAMERA;
-int cameraId = 0;
+int cameraId = 2;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(arrayToIP((int[]){10, 17, 6, 2}));
+const QHostAddress udpRecipient(arrayToIP("10.17.7.2")); //"192.168.17.17"/*"10.17.6.5"*/)); //(0x0A110602)
 const short udpPort = 80;
 QUdpSocket udpSocket;
 const bool saveImages = true;
@@ -62,14 +57,6 @@ static const bool STITCH_IMAGES = false;
 // Values for threshold IR
 int gray_min = 200;
 int gray_max = 255;
-
-// Values for threshold RGB
-const int hue_min = 35;
-const int hue_max = 90;
-const int saturation_min = 10;
-const int saturation_max = 255;
-const int value_min = 140;
-const int value_max = 255;
 
 bool SAVE_IMAGES = false;
 bool SAVE_LOGS = true;
@@ -90,7 +77,7 @@ double ballRatioMax = 0.9;
 
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
-int contourMinArea = 5;
+int contourMinArea = 25;
 float Tan_FOV_Y_Half = 1.46;
 
 const int kern_mat0[] = {1,0,1,
@@ -234,13 +221,14 @@ int demo()
     ImageWriter writer(true, 1.0, "demo");
     ThreadData data;
     if (mode == CAMERA) {
-        data.camera = VideoCapture(cameraId);
+        sprintf(str, "v4l2:///dev/video1706%d", cameraId);
+        data.camera = VideoCapture(str);
         if (!data.camera.isOpened()) {
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+//        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+//        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
         data.camera = VideoCapture(videoPath);
         if (!data.camera.isOpened()) {
@@ -271,10 +259,11 @@ int demo()
         if (mode == CAMERA || mode == VIDEO) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
             // Grab a frame and contain it in the cv::Mat img
             data.camera >> img;
+            cv::resize(img, img, resolution);
         } else {
             img = inframe.clone();
         }
-        if (cameraId == 0) {
+        if (cameraId == 2) {
             cv::flip(img, img, -1);
         }
 
@@ -581,7 +570,10 @@ int sa()
         if (threadData[2]->pairCase == LEFT) {
             targetPair[2][0] = Point2i(0, 4);
             if (threadData[0]->pairCase == LEFT) { // opposite side of screen, may be illegal
-                targetPair[0][0] = Point2i(2, 6);
+                if (threadData[2]->staticTargets[0].massCenter.x > 600 && threadData[0]->staticTargets[0].massCenter.x < 200) {
+                    //ignore
+                } else
+                    targetPair[0][0] = Point2i(2, 6);
                 if (threadData[1]->pairCase == LEFT) { // max 2 left pairs
                     cerr << "Target case invalid!" << endl;
                 } else if (threadData[1]->pairCase == RIGHT) {
@@ -627,7 +619,10 @@ int sa()
                     cerr << "C'EST IMPOSSIBLE !" << endl;
                 }
             } else if (threadData[0]->pairCase == RIGHT) {
-                targetPair[0][0] = Point2i(3, 7);
+                if (threadData[2]->staticTargets[0].massCenter.x > 600 && threadData[0]->staticTargets[0].massCenter.x < 200) {
+                    //ignore
+                } else
+                    targetPair[0][0] = Point2i(3, 7);
                 if (threadData[1]->pairCase == LEFT) {
                     targetPair[1][0] = Point2i(0, 4);
                 } else if (threadData[1]->pairCase == RIGHT || threadData[1]->pairCase == ALL) {
@@ -664,7 +659,19 @@ int sa()
                     cerr << "c'est impossible" << endl;
                 }
             } else if (threadData[0]->pairCase == RIGHT) {
-                targetPair[0][0] = Point2i(3, 7);
+                bool ignore = false;
+                if (threadData[2]->staticTargets.size() == 2) {
+                    if (threadData[2]->staticTargets[1].massCenter.x > 600 && threadData[0]->staticTargets[0].massCenter.x < 200) {
+                        ignore = true;
+                    }
+                }
+                if (threadData[2]->dynamicTargets.size() == 2) {
+                    if (threadData[2]->dynamicTargets[1].massCenter.x > 600 && threadData[0]->staticTargets[0].massCenter.x < 200) {
+                        ignore = true;
+                    }
+                }
+                if (!ignore)
+                    targetPair[0][0] = Point2i(3, 7);
                 if (threadData[1]->pairCase != NONE) {
                     cerr << "c'est impossible" << endl;
                 }
@@ -735,6 +742,27 @@ int sa()
                 P[pi][pj] = -1;
             }
         }
+        double robotDistance = 0, robotAngle = 0;
+        if (threadData[0]->robotISA != -99
+                && threadData[0]->robotISA <= -30 && threadData[2]->robotISA > 30) {
+            // ensure we are overlapping
+            double rightAngle = 150 - threadData[0]->robotISA;
+            double leftAngle = 150 - threadData[2]->robotISA;
+            double centerAngle = 180 - rightAngle - leftAngle;
+            // tan (left) * n = 13 * tan (right) - tan (right) * n    SOLVE FOR N
+            double tanR = tan(rightAngle * (CV_PI / 180));
+            double tanL = tan(leftAngle * (CV_PI / 180));
+            // tanL * N = (13 * tanR) - (tanR * n)
+            // tanR * N + tanL * N = 13 * tanR
+            // (tanR + tanL) * N = 13 * tanR
+            double N = (13 * tanR) / (tanR + tanL);
+            double distance1 = tanR * N;
+            double distance2 = tanL * (13 - N);
+            robotDistance = (distance1 + distance2) / 2;
+            double robotAngle1 = threadData[0]->robotISA + 30;
+            double robotAngle2 = threadData[2]->robotISA - 30;
+            robotAngle = (robotAngle1 + robotAngle2) / 2;
+        }
         std::vector<cv::Point3f> dataWorldCoords;
         double R[8] = {0};
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
@@ -799,6 +827,11 @@ int sa()
         }
         double xPos, yPos, heading;
         FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
+        if (xPos == 0 )
+        {
+            xPos = -1;
+            yPos = -1;
+        }
         printf("FindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
                R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
         if (USE_POSE) {
@@ -823,9 +856,9 @@ int sa()
         if (doUdp) {
             int whichGoalHot = 0;
             if (threadData[0]->pairCase == LEFT || threadData[2]->pairCase == LEFT) {
-                whichGoalHot = 0;
-            } else if (threadData[0]->pairCase == RIGHT || threadData[2]->pairCase == RIGHT) {
                 whichGoalHot = 1;
+            } else if (threadData[0]->pairCase == RIGHT || threadData[2]->pairCase == RIGHT) {
+                whichGoalHot = 2;
             }
             QByteArray datagram = QByteArray::number(xPos) + " "
                     + QByteArray::number(yPos) + " "
@@ -834,7 +867,9 @@ int sa()
                     + QByteArray::number(threadData[largestBall]->distanceToBall) + " "
                     + QByteArray::number(threadData[largestBall]->angleToBall) + " "
                     + QByteArray::number(threadData[largestBall]->ballVelocity) + " "
-                    + QByteArray::number(threadData[largestBall]->ballHeading);
+                    + QByteArray::number(threadData[largestBall]->ballHeading) + " "
+                    + QByteArray::number(robotDistance) + " "
+                    + QByteArray::number(robotAngle);
             udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, udpPort);
         }
         double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
@@ -857,7 +892,7 @@ int sa()
                 Window::print(string(str), pano, Point(5, 15));
                 imshow(windowName, pano);
             }
-        } else if (true) {
+        } else if (displayMode != WindowMode::NONE) {
             imshow("cam-zero", threadData[0]->dst);
             imshow("cam-one", threadData[1]->dst);
             imshow("cma-two", threadData[2]->dst);
@@ -871,7 +906,7 @@ int sa()
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
         cout << "Processed all image code in " << seconds << " seconds." << endl;
-        switch (char key = waitKey(30)) {
+        switch (char key = waitKey(10)) {
         case 27:
             return key - 27;
         }

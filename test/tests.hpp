@@ -11,5 +11,6 @@
 
 int testFindXYH();
 //int testFindTarget();
+int testArrayToIP();
 
 #endif

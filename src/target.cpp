@@ -177,8 +177,8 @@ void targetDetection(ThreadData &data)
             Point2i fakeStaticCenter = boundRect.tl() + Point2i(0, boundRect.height / 2);
             // lie about the values a little bit
             // TODO fake values for the corners
-            Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect};
-            Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect};
+            Target::Target fakeDynamic = {Target::DYNAMIC, Real_Distance, Plane_Distance_Combined, moment, fakeDynamicCenter, fakeDynamicCenter, boundRect, minRect, In_Screen_Angle};
+            Target::Target fakeStatic = {Target::STATIC, Real_Distance, Plane_Distance_Combined, moment, fakeStaticCenter, fakeStaticCenter, boundRect, minRect, In_Screen_Angle};
             targets.push_back(fakeDynamic);
             targets.push_back(fakeStatic);
             staticTargets.push_back(fakeStatic);
@@ -189,7 +189,7 @@ void targetDetection(ThreadData &data)
             failedSides++;
             continue;
         }
-        Rect boundRect = boundingRect(polygon);
+        Rect boundRect = boundingRect(contour);
         RotatedRect minRect = minAreaRect( Mat(contour));
         Point2f rect_points[4];
         minRect.points(rect_points);
@@ -224,7 +224,7 @@ void targetDetection(ThreadData &data)
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(0, 0, 255));
             continue;
         }
-        double planeDistance, realDistance;
+        double planeDistance, realDistance, inScreenAngle;
 
         if (targetType == Target::STATIC) // static target
         {
@@ -236,8 +236,8 @@ void targetDetection(ThreadData &data)
 
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance = Plane_Distance / (cos(In_Screen_Angle * CV_PI / 180));
+            inScreenAngle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
+            double Real_Distance = Plane_Distance / (cos(inScreenAngle * CV_PI / 180));
             double modifiedReal = Real_Distance;
             if (Real_Distance > 149) {
                 modifiedReal = Real_Distance + metersToInches(0.72583);
@@ -265,8 +265,8 @@ void targetDetection(ThreadData &data)
                 Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
             double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
-            double In_Screen_Angle_Dynamic = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
-            double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(In_Screen_Angle_Dynamic * CV_PI / 180));
+            inScreenAngle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
+            double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(inScreenAngle * CV_PI / 180));
             planeDistance = Plane_Distance_Dynamic;
             realDistance = Real_Distance_Dynamic;
 
@@ -285,7 +285,7 @@ void targetDetection(ThreadData &data)
             Dynamic_Target.push_back(contours[i]);
         }
 
-        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect};
+        Target::Target target = {targetType, realDistance, planeDistance, moment, massCenter, center, boundRect, minRect, inScreenAngle};
         targets.push_back(target);
         if (targetType == Target::STATIC) {
             staticTargets.push_back(target);

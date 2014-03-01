@@ -24,7 +24,7 @@ extern cv::TermCriteria criteria;
 extern ProcessingMode procMode;
 extern unsigned int ballMinArea, ballSidesMin;
 extern double ballRatioMin, ballRatioMax;
-const cv::Size resolution = cv::Size(640, 480);
+const cv::Size resolution = cv::Size(852, 480);
 extern bool SAVE_IMAGES, SAVE_LOGS;
 
 #endif // CONFIG_HPP

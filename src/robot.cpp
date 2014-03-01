@@ -8,32 +8,29 @@ using namespace std;
 using namespace cv;
 
 static vector<ThresholdDataHSV> robotBumpers = {
-    {115, 150, 116, 255, 100, 255}, // RED
-    {89, 187, 59, 164, 132, 255} // BLUE
+//    {105, 150, 116, 255, 100, 255}, // RED
+//    {6, 10, 2, 47, 70, 218} // BLUE
+    {55, 131, 38, 148, 106, 209}
 };
 
 static vector<BallTest> testsRobots = {
     {"area", [](vector<Point> contour) {
          return contourArea(contour) > 500;
-     }},
-    {"l", [](vector<Point> contour) {
-         Rect boundRect = boundingRect(contour);
-         double contourRatio = static_cast<double>(contourArea(contour)) / boundRect.area();
-         if (contourRatio < 0.3 && contourRatio > 0.1) printf("Successful ratio is %f.\n", contourRatio);
-         return contourRatio < 0.3 && contourRatio > 0.1;
      }}
 };
+
 
 void robotDetection(ThreadData &data)
 {
     cvtColor(data.image, data.image, CV_BGR2RGB);
     if (displayMode == WindowMode::RAW) imshow(windowName, data.image);
-    cvtColor(data.image, data.image, CV_RGB2HSV);
-    Mat threshOutput = Mat::zeros(data.image.rows, data.image.cols, CV_8U), threshDest;
+    cvtColor(data.image, data.image, CV_BGR2HSV);
+    Mat threshOutput = Mat::zeros(data.image.rows, data.image.cols, CV_8U);
     for (ThresholdDataHSV &thresh : robotBumpers) {
+        Mat threshDest;
         inRange(data.image, Scalar(thresh.h_min, thresh.s_min, thresh.v_min),
                 Scalar(thresh.h_max, thresh.s_max, thresh.v_max), threshDest);
-        threshOutput += threshDest;
+        cv::bitwise_or(threshDest, threshOutput, threshOutput);
     }
     data.image = threshOutput;
     if (displayMode == WindowMode::THRESHOLD) imshow(windowName, data.image);
@@ -47,9 +44,27 @@ void robotDetection(ThreadData &data)
     cvtColor(passing, passing, CV_GRAY2BGR);
     drawContours(passing, succeededContours, -1, Scalar(255, 0, 0));
     if (displayMode == WindowMode::PASS) imshow(windowName, passing);
+    vector<Point> largestContour;
     for (vector<Point> &contour : succeededContours) {
-        Rect boundRect = boundingRect(contour);
-        rectangle(passing, boundRect.tl(), boundRect.br(), Scalar(0, 255, 0));
+        if (largestContour.size() > 0) {
+            if (contourArea(contour) > contourArea(largestContour)) {
+                largestContour = contour;
+            }
+        } else {
+            largestContour = contour;
+        }
     }
-    if (displayMode == WindowMode::FINAL) imshow(windowName, passing);
+    if (largestContour.size() == 0) {
+        // no contour found
+        return;
+    }
+    Moments moment = moments(largestContour, false);
+    Point2f massCenter(moment.m10/moment.m00, moment.m01/moment.m00);
+    if (massCenter.x < 200 || massCenter.x > 600) {
+        // another overlap test, only populate if near center
+        data.robotISA = (cameraInfo.fieldOfView.x / data.image.cols) * massCenter.x - 55.5;
+        printf("Robot ISA:%.2f MCX:%.2f MCY:%.2f\n", data.robotISA, massCenter.x, massCenter.y);
+        circle(final, massCenter, 15, Scalar(255, 255, 255));
+        if (displayMode == WindowMode::FINAL) imshow(windowName, final);
+    }
 }

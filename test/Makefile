@@ -1,7 +1,7 @@
-LDFLAGS=
+LDFLAGS=-lopencv_core
 CFLAGS=-std=c++11 -I../src
 CC=g++
-SOURCES=main.cpp findxyh.cpp ../src/xyh.cpp
+SOURCES=main.cpp findxyh.cpp arraytoip.cpp ../src/xyh.cpp ../src/util.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=./test
 
