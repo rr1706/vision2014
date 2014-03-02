@@ -21,6 +21,7 @@
 #include "imagewriter.h"
 #include "data.hpp"
 #include "config.hpp"
+#include "udpserver.h"
 #include "../lib/Webcam.hpp"
 #include "../lib/libcam.h"
 
@@ -539,6 +540,8 @@ void runThread(ThreadData *data) {
 }
 
 ThreadData* threadData[CAMERA_COUNT];
+std::thread* serverThread;
+UDPServer* server;
 
 void stopCameras() {
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
@@ -546,6 +549,9 @@ void stopCameras() {
         threadData[i]->v4l2Cam->SetStreaming(false);
         delete threadData[i]->v4l2Cam;
     }
+    shutdown(server->socketFd, SHUT_RDWR);
+    serverThread->join();
+    delete server;
 }
 
 int sa()
@@ -584,6 +590,8 @@ int sa()
         threadData[i]->v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
 
     }
+    server = new UDPServer(8888);
+    serverThread = new std::thread(&UDPServer::listenLoop, server);
     signal(SIGTERM, [](int signum) {
         fprintf(stderr, "Abnormal program termination. Closing camera connections...");
         stopCameras();

@@ -2,7 +2,6 @@
 #define CONFIG_HPP
 
 #include <string>
-#include <opencv2/core/mat.hpp>
 #include <opencv2/core/core.hpp>
 
 #include "util.hpp"
@@ -29,5 +28,7 @@ const cv::Size captureResolution = cv::Size(1280, 720);
 extern bool SAVE_IMAGES, SAVE_LOGS;
 const bool FLIP_IMAGE = true;
 const bool FLIP_IMAGE_CAMERA = 2;
+
+void setColor(TeamColor color);
 
 #endif // CONFIG_HPP

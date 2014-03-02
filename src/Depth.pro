@@ -29,7 +29,8 @@ SOURCES += \
     robot.cpp \
     ../lib/Webcam.cpp \
     ../lib/CameraFrame.cpp \
-    ../lib/libcam.cpp
+    ../lib/libcam.cpp \
+    udpserver.cpp
 
 LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui #`pkg-config --libs opencv`
 QMAKE_CXXFLAGS += -std=c++0x -I/usr/include/ni
@@ -46,4 +47,5 @@ HEADERS += \
     config.hpp \
     ../lib/Webcam.hpp \
     ../lib/CameraFrame.hpp \
-    ../lib/libcam.h
+    ../lib/libcam.h \
+    udpserver.h
