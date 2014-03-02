@@ -101,7 +101,7 @@ void targetDetection(ThreadData &data)
     int failedSquare = 0;
     int failedVLarge = 0;
     int success = 0;
-    double Image_Heigh_in = 0.0;
+    double imageHeightReal = 0.0;
     Mat contoursImg = Mat::zeros(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8U);
     double R[8] = {0};
     int P[CAMERA_COUNT][TARGET_COUNT];
@@ -153,9 +153,9 @@ void targetDetection(ThreadData &data)
             int centerY = boundRect.y + boundRect.height / 2;
             Point2i center = {centerX, centerY};
 
-            Image_Heigh_in = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
+            imageHeightReal = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance_Combined = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double Plane_Distance_Combined = (imageHeightReal) / Tan_FOV_Y_Half;
             double In_Screen_Angle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance_Combined / (cos(In_Screen_Angle * CV_PI / 180));
             double Mod_Real_Distance = 0;
@@ -224,18 +224,18 @@ void targetDetection(ThreadData &data)
             putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(0, 0, 255));
             continue;
         }
-        double planeDistance, realDistance, inScreenAngle;
+        double planeDistance = 0, realDistance = 0, inScreenAngle = 0;
 
         if (targetType == Target::STATIC) // static target
         {
             RotatedRect minRect = minAreaRect(contour);
 
-            Image_Heigh_in = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / minRect.boundingRect().height;
+            imageHeightReal = (IMAGE_HEIGHT * STATIC_TARGET_HEIGHT) / minRect.boundingRect().height;
             //  refinedHeight = distance(localCorners[0], localCorners[2]);
             //  flatHeight = localCorners[2].y - localCorners[0].y;        int targetId = 0; // TODO find this, 0-7
 
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double Plane_Distance = (imageHeightReal) / Tan_FOV_Y_Half;
             inScreenAngle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance = Plane_Distance / (cos(inScreenAngle * CV_PI / 180));
             double modifiedReal = Real_Distance;
@@ -261,10 +261,10 @@ void targetDetection(ThreadData &data)
         }
         else if (targetType == Target::DYNAMIC)
         {
-            if (Image_Heigh_in == 0.0) // only set with dynamic if there is no value, static is probably more accurate
-                Image_Heigh_in = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
+            if (imageHeightReal == 0.0) // only set with dynamic if there is no value, static is probably more accurate
+                imageHeightReal = (IMAGE_HEIGHT * DYNAMIC_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
-            double Plane_Distance_Dynamic = (Image_Heigh_in) / Tan_FOV_Y_Half;
+            double Plane_Distance_Dynamic = (imageHeightReal) / Tan_FOV_Y_Half;
             inScreenAngle = (cameraInfo.fieldOfView.x / IMAGE_WIDTH) * Center_Static_X;
             double Real_Distance_Dynamic = Plane_Distance_Dynamic / (cos(inScreenAngle * CV_PI / 180));
             planeDistance = Plane_Distance_Dynamic;
@@ -387,7 +387,7 @@ void targetDetection(ThreadData &data)
     putText(dst, str,Point(5,45), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Targets S:%ld D:%ld", (long) staticTargets.size(), (long) dynamicTargets.size());
     putText(dst, str,Point(5,60), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
-    sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, Image_Heigh_in);
+    sprintf(str, "Image Height %dpx %.2fin", IMAGE_HEIGHT, imageHeightReal);
     putText(dst, str,Point(5,75), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);
     sprintf(str, "Heading %f xR %f yR %f", heading, xPos, yPos);
     putText(dst, str,Point(5,90), CV_FONT_HERSHEY_COMPLEX_SMALL, 0.75, Scalar(255,0,255),1,8,false);

@@ -26,5 +26,7 @@ extern unsigned int ballMinArea, ballSidesMin;
 extern double ballRatioMin, ballRatioMax;
 const cv::Size resolution = cv::Size(852, 480);
 extern bool SAVE_IMAGES, SAVE_LOGS;
+const bool FLIP_IMAGE = true;
+const bool FLIP_IMAGE_CAMERA = 2;
 
 #endif // CONFIG_HPP

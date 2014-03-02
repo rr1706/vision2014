@@ -20,9 +20,11 @@ enum ProcessingMode {
 };
 
 enum InputSource {
-    CAMERA = 0,
-    IMAGE = 1,
-    VIDEO = 2
+    CAMERA,
+    IMAGE,
+    VIDEO,
+    V4L2,
+    OCV_V4L2
 };
 
 enum TargetCase {

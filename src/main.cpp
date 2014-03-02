@@ -21,6 +21,8 @@
 #include "imagewriter.h"
 #include "data.hpp"
 #include "config.hpp"
+#include "../lib/Webcam.hpp"
+#include "../lib/libcam.h"
 
 const float BUMPER_HEIGHT = 5;
 
@@ -37,9 +39,9 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-ProcessingMode procMode = SA;
-const InputSource mode = CAMERA;
-int cameraId = 2;
+ProcessingMode procMode = DEMO;
+const InputSource mode = V4L2;
+int cameraId = 0;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
 // displayImage replaced with WindowMode::NONE
@@ -220,19 +222,45 @@ int demo()
     clock_t begin = clock();
     ImageWriter writer(true, 1.0, "demo");
     ThreadData data;
+    CameraFrame camFrame;
+    Webcam *v4l2Cam;
+//    Camera cam("/dev/video1", 640, 480, 30);
     if (mode == CAMERA) {
-        sprintf(str, "v4l2:///dev/video1706%d", cameraId);
-        data.camera = VideoCapture(str);
+        data.camera = VideoCapture(cameraId);
         if (!data.camera.isOpened()) {
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-//        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-//        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
         data.camera = VideoCapture(videoPath);
         if (!data.camera.isOpened()) {
             cerr << "Failed to open video path:" << videoPath << endl;
+            return -1;
+        }
+    } else if (mode == V4L2) {
+        sprintf(str, "/dev/video%d", cameraId);
+        v4l2Cam = new Webcam(str, 1);
+        v4l2Cam->SetResolution(640, 480);
+        v4l2Cam->SetFPS(30);
+        v4l2Cam->SetStreaming(true);
+        v4l2Cam->SetControl(V4L2_CID_AUTO_WHITE_BALANCE, 0);
+        v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, 0);
+        v4l2Cam->SetControl(V4L2_CID_SHARPNESS, 4);
+        v4l2Cam->SetControl(V4L2_CID_CONTRAST, 32);
+        v4l2Cam->SetControl(V4L2_CID_SATURATION, 55);
+        v4l2Cam->SetControl(V4L2_CID_HUE, 0);
+        v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
+        for (auto x : v4l2Cam->GetPixelFormats()) {
+            unsigned char* fourcc = (unsigned char*) &x;
+            printf("pix fmt %c%c%c%c\n", fourcc[0], fourcc[1], fourcc[2], fourcc[3]);
+        }
+    } else if (mode == OCV_V4L2) {
+        sprintf(str, "v4l2:///dev/video1706%d", cameraId);
+        data.camera = VideoCapture(str);
+        if (!data.camera.isOpened()) {
+            cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
     }
@@ -256,14 +284,18 @@ int demo()
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
-        if (mode == CAMERA || mode == VIDEO) { // Replaced #if with braced conditional. Modern compiler should have no performance differences.
-            // Grab a frame and contain it in the cv::Mat img
+        if (mode == CAMERA || mode == VIDEO) {
+            data.camera >> img;
+        } else if (mode == IMAGE) {
+            img = inframe.clone();
+        } else if (mode == V4L2) {
+            v4l2Cam->GetFrame(camFrame);
+            img = camFrame.getMat();
+        } else if (mode == OCV_V4L2) {
             data.camera >> img;
             cv::resize(img, img, resolution);
-        } else {
-            img = inframe.clone();
         }
-        if (cameraId == 2) {
+        if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA) {
             cv::flip(img, img, -1);
         }
 
@@ -748,7 +780,7 @@ int sa()
             // ensure we are overlapping
             double rightAngle = 150 - threadData[0]->robotISA;
             double leftAngle = 150 - threadData[2]->robotISA;
-            double centerAngle = 180 - rightAngle - leftAngle;
+            // double centerAngle = 180 - rightAngle - leftAngle;
             // tan (left) * n = 13 * tan (right) - tan (right) * n    SOLVE FOR N
             double tanR = tan(rightAngle * (CV_PI / 180));
             double tanL = tan(leftAngle * (CV_PI / 180));
