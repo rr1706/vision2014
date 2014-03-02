@@ -7,9 +7,12 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "util.hpp"
 #include "solutionlog.hpp"
+#include "../lib/Webcam.hpp"
 
 struct ThreadData {
     cv::VideoCapture camera;
+    Webcam* v4l2Cam;
+    CameraFrame camFrame;
     cv::Mat image, original, targetDetect, dst;
     std::vector<Target::Target> targets;
     std::vector<Target::Target> staticTargets;

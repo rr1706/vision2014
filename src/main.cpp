@@ -39,7 +39,7 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-ProcessingMode procMode = DEMO;
+ProcessingMode procMode = SA;
 const InputSource mode = V4L2;
 int cameraId = 0;
 TrackMode tracking = TARGET;
@@ -293,7 +293,7 @@ int demo()
             img = camFrame.getMat();
         } else if (mode == OCV_V4L2) {
             data.camera >> img;
-            cv::resize(img, img, resolution);
+            cv::resize(img, img, resizeResolution);
         }
         if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA) {
             cv::flip(img, img, -1);
@@ -455,7 +455,7 @@ int demo()
             }
         }
         writer.writeImage(img);
-        static const int padding = 15;
+        static const int padding = 30;
         int topPortion = img.rows * (2.0/3);
         int bottomPortion = img.rows - topPortion;
         Mat topROI = img.clone(), bottomROI = img.clone();
@@ -508,10 +508,13 @@ int demo()
 }
 
 void runThread(ThreadData *data) {
-    data->camera >> data->image;
+    data->v4l2Cam->GetFrame(data->camFrame);
+    data->image = data->camFrame.getMat();
+//    data->camera >> data->image;
 //    cv::pyrDown(data->image, data->image);
 //    cv::pyrDown(data->image, data->image);
-    cv::resize(data->image, data->image, resolution);
+    if (resizeResolution != captureResolution)
+        cv::resize(data->image, data->image, resizeResolution);
     if (data->id == 2) {
         cv::flip(data->image, data->image, -1);
     }
@@ -537,6 +540,14 @@ void runThread(ThreadData *data) {
 
 ThreadData* threadData[CAMERA_COUNT];
 
+void stopCameras() {
+    for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
+//            threadData[i]->camera.release();
+        threadData[i]->v4l2Cam->SetStreaming(false);
+        delete threadData[i]->v4l2Cam;
+    }
+}
+
 int sa()
 {
     int cameraToDeviceTable[3] = {0, 1, 2};
@@ -558,14 +569,24 @@ int sa()
             sprintf(str, "%s/cam_%d/target.csv", dirname.c_str(), i);
             threadData[i]->targetLog.open(str, {"frame", "time", "image", "distance", "bound_height"});
         }
-        sprintf(str, "v4l2:///dev/video1706%d", cameraToDeviceTable[i]);
-        threadData[i]->camera.open(str);
+        sprintf(str, "/dev/video1706%d", cameraToDeviceTable[i]);
+//        threadData[i]->camera.open(str);
+        threadData[i]->v4l2Cam = new Webcam(str, 1);
+        threadData[i]->v4l2Cam->SetResolution(captureResolution.width, captureResolution.height);
+        threadData[i]->v4l2Cam->SetFPS(30);
+        threadData[i]->v4l2Cam->SetStreaming(true);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_AUTO_WHITE_BALANCE, 0);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, 15);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_SHARPNESS, 4);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_CONTRAST, 32);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_SATURATION, 55);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_HUE, 0);
+        threadData[i]->v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
+
     }
     signal(SIGTERM, [](int signum) {
         fprintf(stderr, "Abnormal program termination. Closing camera connections...");
-        for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-            threadData[i]->camera.release();
-        }
+        stopCameras();
         fprintf(stderr, " done.\n");
         exit(signum);
     });
@@ -799,8 +820,9 @@ int sa()
         double R[8] = {0};
         for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
             ThreadData *data = threadData[i];
+            sprintf(str, "case_%d", i);
+            saLog.log(str, data->pairCase);
 
-            cout << "Thread " << i << " case: " << data->pairCase << endl;
             if (data->pairCase == LEFT && data->staticTargets.size() > 0
                     && data->dynamicTargets.size() > 0) {
 //                if (abs(data->staticTargets[0].realDistance - data->dynamicTargets[0].realDistance) > STATIC_TARGET_IGNORE_THRESHOLD)
@@ -854,6 +876,13 @@ int sa()
                 }
             }
         }
+        for (int i = 0; i < CAMERA_COUNT; i++) {
+            for (int j = 0; j < TARGET_COUNT; j++) {
+                if (P[i][j] != -1) {
+                    P[i][j] *= 1.5;
+                }
+            }
+        }
         for (int i = 0; i < 8; i++) {
             if (R[i] < 0) R[i] = 0;
         }
@@ -904,8 +933,6 @@ int sa()
                     + QByteArray::number(robotAngle);
             udpSocket.writeDatagram(datagram.data(), datagram.size(), udpRecipient, udpPort);
         }
-        double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(start-begin).count();
-        saLog.log("time", tSnSt).log("heading", heading).log("x", xPos).log("y", yPos).flush();
         // stitching is broken currently, TODO test on odroid
         if (STITCH_IMAGES) {
             Mat pano;
@@ -937,9 +964,12 @@ int sa()
 
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration_cast<std::chrono::duration<double> >(finish-start).count();
+        double tSnSt = std::chrono::duration_cast<std::chrono::duration<double> >(finish-begin).count();
+        saLog.log("time", tSnSt).log("frame_time", seconds).log("heading", heading).log("x", xPos).log("y", yPos).flush();
         cout << "Processed all image code in " << seconds << " seconds." << endl;
         switch (char key = waitKey(10)) {
         case 27:
+            stopCameras();
             return key - 27;
         }
     }
