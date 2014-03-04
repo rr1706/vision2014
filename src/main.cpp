@@ -648,11 +648,11 @@ int sa()
                 } else
                     targetPair[0][0] = Point2i(2, 6);
                 if (threadData[1]->pairCase == LEFT) { // max 2 left pairs
-                    cerr << "Target case invalid!" << endl;
+                    fprintf(stderr, "\rPair error: 2L, 0L, 1L\n");
                 } else if (threadData[1]->pairCase == RIGHT) {
                     targetPair[1][0] = Point2i(3, 8);
                 } else if (threadData[1]->pairCase == ALL) {
-                    cerr << "Target case invalid!" << endl;
+                    fprintf(stderr, "\rPair error: 2L, 0L, 1A\n");
                 }
             } else if (threadData[0]->pairCase == RIGHT) {
                 targetPair[0][0] = Point2i(1, 5);
@@ -668,7 +668,7 @@ int sa()
                 targetPair[0][0] = Point2i(2, 6);
                 targetPair[0][1] = Point2i(3, 7);
                 if (threadData[1]->pairCase != NONE) {
-                    cerr << "C'EST IMPOSSIBLE !" << endl;
+                    fprintf(stderr, "\rPair error: 2L, 0A, 1!N\n");
                 }
             } else {
                 if (threadData[1]->pairCase == LEFT) {
@@ -689,7 +689,7 @@ int sa()
                 } else if (threadData[1]->pairCase == RIGHT) {
                     targetPair[1][0] = Point2i(3, 7);
                 } else if (threadData[1]->pairCase == ALL) {
-                    cerr << "C'EST IMPOSSIBLE !" << endl;
+                    fprintf(stderr, "\rPair error: 2R, 0L, 1A\n");
                 }
             } else if (threadData[0]->pairCase == RIGHT) {
                 if (threadData[2]->staticTargets[0].massCenter.x > 600 && threadData[0]->staticTargets[0].massCenter.x < 200) {
@@ -699,7 +699,7 @@ int sa()
                 if (threadData[1]->pairCase == LEFT) {
                     targetPair[1][0] = Point2i(0, 4);
                 } else if (threadData[1]->pairCase == RIGHT || threadData[1]->pairCase == ALL) {
-                    cerr << "There are not three right targets" << endl;
+                    fprintf(stderr, "\rPair error: 2R, 0R, 1R|A\n");
                 }
             } else if (threadData[0]->pairCase == ALL) {
                 targetPair[0][0] = Point2i(2, 6);
@@ -707,7 +707,7 @@ int sa()
                 if (threadData[1]->pairCase == LEFT) {
                     targetPair[1][0] = Point2i(0, 4);
                 } else if (threadData[1]->pairCase == RIGHT || threadData[1]->pairCase == ALL) {
-                    cerr << "There are not three right targets" << endl;
+                    fprintf(stderr, "\rPair error: 2R, 0A, 1R|A\n");
                 }
             } else {
                 if (threadData[1]->pairCase == LEFT) {
@@ -725,11 +725,11 @@ int sa()
             if (threadData[0]->pairCase == LEFT) {
                 targetPair[0][0] = Point2i(2, 6);
                 if (threadData[1]->pairCase == LEFT) {
-                    cerr << "c'est impossible" << endl;
+                    fprintf(stderr, "\rPair error: 2A, 0L, 1L\n");
                 } else if (threadData[1]->pairCase == RIGHT) {
                     targetPair[1][0] = Point2i(3, 7);
                 } else if (threadData[1]->pairCase == ALL) {
-                    cerr << "c'est impossible" << endl;
+                    fprintf(stderr, "\rPair error: 2A, 0L, 1A\n");
                 }
             } else if (threadData[0]->pairCase == RIGHT) {
                 bool ignore = false;
@@ -746,14 +746,14 @@ int sa()
                 if (!ignore)
                     targetPair[0][0] = Point2i(3, 7);
                 if (threadData[1]->pairCase != NONE) {
-                    cerr << "c'est impossible" << endl;
+                    fprintf(stderr, "\rPair error: 2A. 0R, 1!N\n");
                 }
             } else if (threadData[0]->pairCase == ALL) {
                 // should not be possible, but idk
                 targetPair[0][0] = Point2i(2, 6);
                 targetPair[0][1] = Point2i(3, 7);
                 if (threadData[1]->pairCase != NONE) {
-                    cerr << "c'est impossible" << endl;
+                    fprintf(stderr, "\rPair error: 2A, 0A, 1!N\n");
                 }
             } else {
                 if (threadData[1]->pairCase == LEFT) {
@@ -913,8 +913,8 @@ int sa()
             xPos = -1;
             yPos = -1;
         }
-        printf("\rFindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
-               R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
+//        printf("\rFindXYH(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f): %.2f, %.2f, %.2f\n",
+//               R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], xPos, yPos, heading);
         if (USE_POSE) {
             cv::Mat rvec(1,3,cv::DataType<double>::type);
             cv::Mat tvec(1,3,cv::DataType<double>::type);
@@ -934,15 +934,32 @@ int sa()
                 largestBall = i;
             }
         }
+        int whichGoalHot = 0;
+        if (threadData[2]->pairCase == LEFT && threadData[0]->pairCase == RIGHT) {
+            whichGoalHot = 0;
+        } else if (threadData[2]->pairCase == LEFT ){//|| threadData[2]->pairCase == LEFT) {
+            whichGoalHot = 1;
+        } else if (threadData[0]->pairCase == RIGHT ){//||threadData[2]->pairCase == RIGHT) {
+            whichGoalHot = 2;
+        }
+        const char* hotGoal;
+        switch (whichGoalHot) {
+        case 1:
+            hotGoal = "left";
+            break;
+        case 2:
+            hotGoal = "right";
+            break;
+        default:
+            hotGoal = "unk";
+        }
+
+        printf("\rx %.2f y %.2f h%.2f hot %s bd %.2f ba %.2f bv %.2f bh %.2f rd %.2f ra %.2f\n",
+               xPos, yPos, heading, hotGoal, threadData[largestBall]->distanceToBall,
+               threadData[largestBall]->angleToBall, threadData[largestBall]->ballVelocity,
+               threadData[largestBall]->ballHeading, robotDistance, robotAngle);
+
         if (doUdp) {
-            int whichGoalHot = 0;
-            if (threadData[2]->pairCase == LEFT && threadData[0]->pairCase == RIGHT) {
-                whichGoalHot = 0;
-            } else if (threadData[2]->pairCase == LEFT ){//|| threadData[2]->pairCase == LEFT) {
-                whichGoalHot = 1;
-            } else if (threadData[0]->pairCase == RIGHT ){//||threadData[2]->pairCase == RIGHT) {
-                whichGoalHot = 2;
-            }
             QByteArray datagram = QByteArray::number(xPos) + " "
                     + QByteArray::number(yPos) + " "
                     + QByteArray::number(heading) + " "
