@@ -560,6 +560,13 @@ void stopCameras() {
     delete server;
 }
 
+void saShutdown(int signum) {
+    fprintf(stderr, "Abnormal program termination. Closing camera connections...\n");
+    stopCameras();
+    fprintf(stderr, "done.\n");
+    exit(signum);
+}
+
 int sa()
 {
     int cameraToDeviceTable[3] = {0, 1, 2};
@@ -577,9 +584,15 @@ int sa()
         }
         if (SAVE_LOGS) {
             sprintf(str, "%s/cam_%d/ball.csv", dirname.c_str(), i);
-            threadData[i]->ballLog.open(str, {"frame", "time", "image", "pos_px_x", "pos_px_y", "distance", "rotation"});
+            threadData[i]->ballLog.open(str, {"frame", "time", "image", "img_x", "img_y", "radius",
+                                              "rel_x", "rel_y", "distance", "rotation"});
             sprintf(str, "%s/cam_%d/target.csv", dirname.c_str(), i);
-            threadData[i]->targetLog.open(str, {"frame", "time", "image", "distance", "bound_height"});
+            threadData[i]->targetLog.open(str, {"frame", "time", "image",
+                                                "s0_dist", "s0_width", "s0_height", "s0_x", "s0_y",
+                                                "s1_dist", "s1_width", "s1_height", "s1_x", "s1_y",
+                                                "d0_dist", "d0_width", "d0_height", "d0_x", "d0_y",
+                                                "d1_dist", "d1_width", "d1_height", "d1_x", "d1_y"
+                                          });
         }
         sprintf(str, "/dev/video1706%d", cameraToDeviceTable[i]);
 //        threadData[i]->camera.open(str);
@@ -598,18 +611,8 @@ int sa()
     }
     server = new UDPServer(8888);
     serverThread = new std::thread(&UDPServer::listenLoop, server);
-    signal(SIGTERM, [](int signum) {
-        fprintf(stderr, "Abnormal program termination. Closing camera connections...");
-        stopCameras();
-        fprintf(stderr, " done.\n");
-        exit(signum);
-    });
-    signal(SIGINT, [](int signum) {
-        fprintf(stderr, "Abnormal program termination. Closing camera connections...");
-        stopCameras();
-        fprintf(stderr, " done.\n");
-        exit(signum);
-    });
+    signal(SIGTERM, saShutdown);
+    signal(SIGINT, saShutdown);
     auto begin = std::chrono::high_resolution_clock::now();
     SolutionLog saLog("sa.csv", {"time", "frame_time", "case_0", "case_1", "case_2", "heading", "x", "y"});
     thread threads[CAMERA_COUNT];

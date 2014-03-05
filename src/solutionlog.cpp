@@ -25,6 +25,10 @@ bool SolutionLog::open(std::string file, std::vector<std::string> columns)
         perror("Failed to open solution log");
     }
     this->columns = columns;
+    this->data.clear();
+    for (std::string column : this->columns) {
+        this->data[column] = 0;
+    }
     return this->file.is_open();
 }
 
@@ -46,6 +50,10 @@ void SolutionLog::flush()
 {
     for (std::string column : this->columns) {
         this->file << this->data[column] << ",";
+    }
+    this->data.clear();
+    for (std::string column : this->columns) {
+        this->data[column] = 0;
     }
     if (this->writes > 20) { // write to the file every 20 solutions
         this->writes = 0;

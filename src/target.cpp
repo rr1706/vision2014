@@ -10,6 +10,19 @@ using namespace cv;
 
 static char str[255];
 
+void logTargetData(SolutionLog& log, Target::Target target, int id = 0) {
+    sprintf(str, "%c%d_dist", target.type == Target::STATIC ? 's' : 'd', id);
+    log.log(str, target.planeDistance);
+    sprintf(str, "%c%d_height", target.type == Target::STATIC ? 's' : 'd', id);
+    log.log(str, target.boundRect.height);
+    sprintf(str, "%c%d_width", target.type == Target::STATIC ? 's' : 'd', id);
+    log.log(str, target.boundRect.width);
+    sprintf(str, "%c%d_x", target.type == Target::STATIC ? 's' : 'd', id);
+    log.log(str, target.boundRect.x);
+    sprintf(str, "%c%d_y", target.type == Target::STATIC ? 's' : 'd', id);
+    log.log(str, target.boundRect.y);
+}
+
 void targetDetection(ThreadData &data)
 {
     const float STATIC_TARGET_HEIGHT = 32.25;
@@ -365,9 +378,16 @@ void targetDetection(ThreadData &data)
     FindXYH(R[0], R[1], R[2], R[3], R[4], R[5], R[6], R[7], P, xPos, yPos, heading);
     // NOTE: THIS IS PER CAMERA FOR DEMO ONLY. Please look to the sa() function above for the FindXYH that is actually used.
     if (staticTargets.size() > 0) {
-        Target::Target target = staticTargets[0];
-        data.targetLog.log("distance", target.planeDistance);
-        data.targetLog.log("bound_height", target.boundRect.height);
+        logTargetData(data.targetLog, staticTargets[0]);
+        if (staticTargets.size() > 1) {
+            logTargetData(data.targetLog, staticTargets[1], 1);
+        }
+    }
+    if (dynamicTargets.size() > 0) {
+        logTargetData(data.targetLog, dynamicTargets[0]);
+        if (dynamicTargets.size() > 1) {
+            logTargetData(data.targetLog, dynamicTargets[1], 1);
+        }
     }
     string caseStr;
     switch (targetCase) {

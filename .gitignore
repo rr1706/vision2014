@@ -8,3 +8,4 @@ xyh.log
 !test/Makefile
 *.swp
 *.orig
+test/findxyh

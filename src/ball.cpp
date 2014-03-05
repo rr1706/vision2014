@@ -215,6 +215,7 @@ void ballDetection(ThreadData &data)
         // calculate median of first five for first point
         // calculate median of last five for second point
         data.ballLog.log("img_x", ballCenterFlat.x).log("img_y", ballCenterFlat.y);
+        data.ballLog.log("radius", radius);
         data.ballLog.log("rel_x", ballPosXreal).log("rel_y", ballPosYreal);
         data.ballLog.log("distance", distanceToBall).log("rotation", ballHeading).log("velocity", ballVelocity).log("heading", ballHeading);
     }
