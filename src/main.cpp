@@ -23,7 +23,6 @@
 #include "config.hpp"
 #include "udpserver.h"
 #include "../lib/Webcam.hpp"
-#include "../lib/libcam.h"
 
 const float BUMPER_HEIGHT = 5;
 
@@ -45,10 +44,10 @@ const InputSource mode = V4L2;
 int cameraId = 2;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
-// displayImage replaced with WindowMode::NONE
+const string imdirPath = "/home/connor/robotics/2014/matches/20140307_093517/cam_2";
 const TeamColor color = RED;
 const bool doUdp = true;
-const QHostAddress udpRecipient(arrayToIP("10.17.6.2")); //"192.168.17.17"/*"10.17.6.5"*/)); //(0x0A110602)
+const QHostAddress udpRecipient(arrayToIP("10.17.6.2"));
 const short udpPort = 80;
 QUdpSocket udpSocket;
 const bool saveImages = true;
@@ -225,7 +224,7 @@ int demo()
     ThreadData data;
     CameraFrame camFrame;
     Webcam *v4l2Cam;
-//    Camera cam("/dev/video1", 640, 480, 30);
+    int imgdirIndex = 0;
     if (mode == CAMERA) {
         data.camera = VideoCapture(cameraId);
         if (!data.camera.isOpened()) {
@@ -264,6 +263,8 @@ int demo()
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
+    } else if (mode == IMGDIR) {
+
     }
     int currentSave = 0;
     int trackI = tracking;
@@ -295,13 +296,20 @@ int demo()
         } else if (mode == OCV_V4L2) {
             data.camera >> img;
             cv::resize(img, img, resizeResolution);
+        } else if (mode == IMGDIR) {
+            sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
+            img = imread(str);
         }
         if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA) {
             cv::flip(img, img, -1);
         }
 
+        int delay = 1;
+        if (mode == IMGDIR) {
+            delay = 300;
+        }
         //Break out of loop if esc is pressed
-        switch (char key = waitKey(1)) {
+        switch (char key = waitKey(delay)) {
         case KEY_QUIT:
             data.ballLog.flush();
             data.targetLog.flush();
@@ -365,6 +373,7 @@ int demo()
                 break;
             }
             break;
+        case '=':
         case '+':
             switch (displayMode) {
             case WindowMode::THRESHOLD:

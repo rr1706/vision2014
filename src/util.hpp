@@ -24,7 +24,8 @@ enum InputSource {
     IMAGE,
     VIDEO,
     V4L2,
-    OCV_V4L2
+    OCV_V4L2,
+    IMGDIR
 };
 
 enum TargetCase {
