@@ -165,6 +165,7 @@ void targetDetection(ThreadData &data)
             int centerX = boundRect.x + boundRect.width / 2;
             int centerY = boundRect.y + boundRect.height / 2;
             Point2i center = {centerX, centerY};
+            if (centerY < 100) continue;
 
             imageHeightReal = (IMAGE_HEIGHT * COMBINED_TARGET_HEIGHT) / boundRect.height;
             double Center_Static_X = (boundRect.x + (boundRect.width / 2)) - (IMAGE_WIDTH/2);
@@ -212,6 +213,11 @@ void targetDetection(ThreadData &data)
         int centerX = boundRect.x + boundRect.width / 2;
         int centerY = boundRect.y + boundRect.height / 2;
         Point2i center = {centerX, centerY};
+        if (centerY < 100) {
+            sprintf(str, "<100y");
+            putText(dst, str, center, CV_FONT_HERSHEY_PLAIN, 0.75, Scalar(0, 0, 255));
+            continue;
+        }
 
         // ratio helps determine orientation of rectangle (vertical / horizontal)
         double ratio = static_cast<double>(boundRect.width) / static_cast<double>(boundRect.height);

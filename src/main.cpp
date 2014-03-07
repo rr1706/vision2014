@@ -80,7 +80,7 @@ double ballRatioMax = 0.9;
 
 // for approxpolydp
 int accuracy = 2; //maximum distance between the original curve and its approximation
-int contourMinArea = 25;
+int contourMinArea = 100;
 float Tan_FOV_Y_Half = 1.46;
 
 const int kern_mat0[] = {1,0,1,
