@@ -303,7 +303,12 @@ int demo()
             cv::resize(img, img, resizeResolution);
         } else if (mode == IMGDIR) {
             sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
-            img = imread(str);
+            if (access(str, R_OK) == 0) {
+                img = imread(str);
+            } else {
+                printf("Stream ending normally, file %s not found.\n", str);
+                return 0;
+            }
         }
         if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA) {
             cv::flip(img, img, -1);
