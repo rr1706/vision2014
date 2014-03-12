@@ -278,8 +278,13 @@ int demo()
         namedWindow(windowName, CV_WINDOW_NORMAL);
     }
     int frame = 0;
-    data.targetLog.open("target.log", {"time", "frame", "image", "distance", "bound_height"});
-    data.ballLog.open("ball.log", {"time", "img_x", "img_y", "rel_x", "rel_y", "distance", "rotation", "velocity", "heading"});
+    data.targetLog.open("target.csv", {"frame", "time", "image",
+                                       "s0_dist", "s0_width", "s0_height", "s0_x", "s0_y",
+                                       "s1_dist", "s1_width", "s1_height", "s1_x", "s1_y",
+                                       "d0_dist", "d0_width", "d0_height", "d0_x", "d0_y",
+                                       "d1_dist", "d1_width", "d1_height", "d1_x", "d1_y"
+                                 });
+    data.ballLog.open("ball.csv", {"time", "img_x", "img_y", "rel_x", "rel_y", "distance", "rotation", "velocity", "heading"});
     while ( 1 )
     {
         clock_t loop_begin = clock();

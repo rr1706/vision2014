@@ -12,7 +12,7 @@ static char str[255];
 
 void logTargetData(SolutionLog& log, Target::Target target, int id = 0) {
     sprintf(str, "%c%d_dist", target.type == Target::STATIC ? 's' : 'd', id);
-    log.log(str, target.planeDistance);
+    log.log(str, inchesToMeters(target.planeDistance));
     sprintf(str, "%c%d_height", target.type == Target::STATIC ? 's' : 'd', id);
     log.log(str, target.boundRect.height);
     sprintf(str, "%c%d_width", target.type == Target::STATIC ? 's' : 'd', id);
