@@ -45,7 +45,8 @@ const InputSource mode = V4L2;
 int cameraId = 2;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
-const string imdirPath = "/home/connor/robotics/2014/matches/20140307_093517/cam_2";
+const string imdirPath = "/home/connor/robotics/2014/Debug/20140313_120504/demo";
+const bool imdirLoop = true;
 const TeamColor color = RED;
 const bool doUdp = true;
 const QHostAddress udpRecipient(arrayToIP("10.17.6.2"));
@@ -315,6 +316,10 @@ int demo()
         } else if (mode == IMGDIR) {
             sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
             if (access(str, R_OK) == 0) {
+                img = imread(str);
+            } else if (imdirLoop) {
+                imgdirIndex = 0;
+                sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
                 img = imread(str);
             } else {
                 printf("Stream ending normally, file %s not found.\n", str);
