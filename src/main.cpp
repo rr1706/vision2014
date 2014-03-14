@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -199,6 +200,16 @@ void onSignal(int signum)
 
 int main()
 {
+    const char* threshMin = getenv("THRESH_MIN");
+    if (threshMin != NULL && strlen(threshMin) > 0) {
+        sscanf(threshMin, "%d", &gray_min);
+    }
+    printf("gray_min=%d\n", gray_min);
+    const char* threshMax = getenv("THRESH_MAX");
+    if (threshMax != NULL && strlen(threshMax) > 0) {
+        sscanf(threshMax, "%d", &gray_max);
+    }
+    printf("gray_max=%d\n", gray_max);
     switch (procMode) {
     case SA:
         return sa();
