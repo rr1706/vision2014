@@ -22,6 +22,10 @@ std::string Thresh::str(Part part) {
         return "Minimum IR";
     case IR_MAX:
         return "Maximum IR";
+    case BRIGHT_MIN:
+        return "Minimum Brightness";
+    case CAM_HUE:
+        return "Camera Hue";
     default:
         throw;
     }

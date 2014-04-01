@@ -224,10 +224,18 @@ int main()
 int dlog()
 {
     VideoCapture camera(CV_CAP_OPENNI_ASUS);
-    if (!camera.isOpened()) return 1;
+    if (!camera.isOpened()) {
+        fprintf(stderr, "Failed to open camera %d.\n", CV_CAP_OPENNI_ASUS);
+        return 1;
+    }
     DepthLogger log(camera);
     return log.start();
 }
+
+int currentBrightness = 0;
+int lastBrightness = 0;
+int currentHue = 0;
+int lastHue = 0;
 
 int demo()
 {
@@ -258,11 +266,11 @@ int demo()
         v4l2Cam->SetFPS(30);
         v4l2Cam->SetStreaming(true);
         v4l2Cam->SetControl(V4L2_CID_AUTO_WHITE_BALANCE, 0);
-        v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, 0);
+        v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, currentBrightness);
         v4l2Cam->SetControl(V4L2_CID_SHARPNESS, 4);
         v4l2Cam->SetControl(V4L2_CID_CONTRAST, 32);
         v4l2Cam->SetControl(V4L2_CID_SATURATION, 55);
-        v4l2Cam->SetControl(V4L2_CID_HUE, 0);
+        v4l2Cam->SetControl(V4L2_CID_HUE, currentHue);
         v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
         for (auto x : v4l2Cam->GetPixelFormats()) {
             unsigned char* fourcc = (unsigned char*) &x;
@@ -384,6 +392,12 @@ int demo()
                 case Thresh::IR_MAX:
                     gray_max -= CHANGE_THRESH;
                     break;
+                case Thresh::BRIGHT_MIN:
+                    currentBrightness -= 1;
+                    break;
+                case Thresh::CAM_HUE:
+                    currentHue -= 1;
+                    break;
                 }
                 break;
             case WindowMode::DILATE:
@@ -428,6 +442,12 @@ int demo()
                 case Thresh::IR_MAX:
                     gray_max += CHANGE_THRESH;
                     break;
+                case Thresh::BRIGHT_MIN:
+                    currentBrightness += 1;
+                    break;
+                case Thresh::CAM_HUE:
+                    currentHue += 1;
+                    break;
                 }
                 break;
             case WindowMode::DILATE:
@@ -466,6 +486,12 @@ int demo()
             break;
         case 'I':
             currentThreshold = Thresh::IR_MAX;
+            break;
+        case 'b':
+            currentThreshold = Thresh::BRIGHT_MIN;
+            break;
+        case 'n':
+            currentThreshold = Thresh::CAM_HUE;
             break;
         case ')':
             cameraId = 0;
@@ -526,6 +552,14 @@ int demo()
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
         printf("Last frame: %.2f seconds.", seconds);
         fflush(stdout);
+        if (currentBrightness != lastBrightness && v4l2Cam != NULL) {
+            v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, currentBrightness);
+            lastBrightness = currentBrightness;
+        }
+        if (currentHue != lastHue && v4l2Cam != NULL) {
+            v4l2Cam->SetControl(V4L2_CID_HUE, currentHue);
+            lastHue = currentHue;
+        }
         if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
@@ -537,7 +571,8 @@ int demo()
                 break;
             }
         }
-    } /// <---- End of While Loop (ESC has to be pressed to break out of loop) otherwise loop
+    }
+    /// <---- End of While Loop (ESC has to be pressed to break out of loop) otherwise loop
 
     /// Destroy all windows and return 0 to end the program
     destroyAllWindows();

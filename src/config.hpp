@@ -27,6 +27,7 @@ const cv::Size captureResolution = cv::Size(1280, 720);
 extern bool SAVE_IMAGES, SAVE_LOGS;
 const bool FLIP_IMAGE = false;
 const bool FLIP_IMAGE_CAMERA = 2;
+extern int currentBrightness, currentHue;
 
 void setColor(TeamColor color);
 

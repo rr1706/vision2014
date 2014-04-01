@@ -75,7 +75,9 @@ namespace Thresh {
         VAL_MIN = 4,
         VAL_MAX = 5,
         IR_MIN = 6,
-        IR_MAX = 7
+        IR_MAX = 7,
+        BRIGHT_MIN = 8,
+        CAM_HUE = 9
     };
     std::string str(Part part);
 }
