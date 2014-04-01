@@ -66,9 +66,12 @@ int DepthLogger::start()
         case 'R':
             cannyRatio++;
             break;
-
+        case 27:
+            goto end;
         }
     }
+    end:
+    camera.release();
     return 0;
 }
 
@@ -85,7 +88,7 @@ double DepthLogger::timeSinceStart()
 DepthResults DepthLogger::process(Mat &depth, cv::Mat &color)
 {
     int imageWidth = depth.cols, imageHeight = depth.rows;
-    Mat dst, thresholded, detectedEdges, calibrated = calibrate - depth - 1;
+    Mat dst, thresholded, detectedEdges, calibrated = depth.clone();//calibrate - depth - 1;
     threshold(calibrated, thresholded, 1, 255, CV_THRESH_BINARY_INV);
     thresholded = depth - thresholded;
     // Create a matrix of the same type and size as depth_mat (for dst)
