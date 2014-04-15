@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <err.h>
 
 
 using namespace std;
@@ -24,9 +25,18 @@ bool ImageFolderCapture::open(const string &filename)
 {
     struct stat buf;
     if (stat(filename.c_str(), &buf) == -1) {
-        perror("stat()");
+        err(1, "Error loading directory");
         return false;
     }
+    char* exampleImage = new char[filename.length() + 15];
+    snprintf(exampleImage, filename.length() + 15, "%s/raw_img_0.png", filename.c_str());
+    if (stat(exampleImage, &buf) == -1) {
+        delete [] exampleImage;
+        err(1, "Error loading image");
+        return false;
+    }
+    delete [] exampleImage;
+
     this->folder_path = filename;
     this->image_index = 0;
     return true;

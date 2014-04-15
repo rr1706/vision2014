@@ -44,11 +44,11 @@ const char KEY_SPEED = ' ';
 
 // config
 ProcessingMode procMode = DEMO;
-const InputSource mode = IMGDIR;
+InputSource mode = IMGDIR;
 int cameraId = 2;
 TrackMode tracking = TARGET;
-const string videoPath = "Y400cmX646cm.avi";
-const string imdirPath = "/home/connor/robotics/2014/matches/calibration_searcy";
+string videoPath = "Y400cmX646cm.avi";
+string imdirPath = "/home/connor/robotics/2014/matches/calibration_searcy";
 const bool imdirLoop = true;
 const TeamColor color = RED;
 const bool doUdp = true;
@@ -214,6 +214,16 @@ int main()
         sscanf(threshMax, "%d", &gray_max);
     }
     printf("gray_max=%d\n", gray_max);
+    if (getenv("INPUT") && strlen(getenv("INPUT")))
+        sscanf(getenv("INPUT"), "%d", &mode);
+    printf("input_source=%d\n", mode);
+    if (getenv("CAMERA") && strlen(getenv("CAMERA")))
+        sscanf(getenv("CAMERA"), "%d", &cameraId);
+    printf("camera=%d\n", cameraId);
+    if (getenv("IMGDIR") && strlen(getenv("IMGDIR"))) {
+        imdirPath = getenv("IMGDIR");
+    }
+    printf("imgdir=%s\n", imdirPath.c_str());
     switch (procMode) {
     case SA:
         return sa();
@@ -538,7 +548,7 @@ int demo()
         /// Stop timing and calculate FPS and Average FPS
         auto finish = std::chrono::high_resolution_clock::now();
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
-        printf("Last frame: %.2f seconds.", seconds);
+        printf("Last frame: %.2f seconds.\n", seconds);
         fflush(stdout);
 #ifdef USE_V4L2
         if (currentBrightness != lastBrightness && mode == V4L2) {
