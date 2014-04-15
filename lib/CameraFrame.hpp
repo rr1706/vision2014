@@ -4,7 +4,9 @@
 #include <cstring>
 #include <stdint.h>
 #include <sys/time.h>
+#ifdef WEBCAM_OCV
 #include <opencv2/core/core.hpp>
+#endif
 
 class CameraFrame {
 public:
@@ -24,7 +26,9 @@ public:
 
 	void Update(uint32_t width, uint32_t height, timeval time);
 
+#ifdef WEBCAM_OCV
     cv::Mat getMat();
+#endif
 
 private:
 	uint32_t m_width;

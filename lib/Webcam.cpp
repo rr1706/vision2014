@@ -450,3 +450,97 @@ void Webcam::DeallocateBuffer(size_t index)
 	m_bufs[index].buf = NULL;
 	m_bufs[index].ptr = NULL;
 }
+
+#ifdef WEBCAM_OCV
+using namespace std;
+using namespace cv;
+
+LinuxCapture::LinuxCapture() : cam(NULL), m_open(false)
+{
+}
+
+LinuxCapture::LinuxCapture(const string& device, int width, int height, int fps)
+    : cam(NULL), m_open(false), width(width), height(height), fps(fps)
+{
+    open(device);
+}
+
+LinuxCapture::LinuxCapture(int device, int width, int height, int fps)
+    : cam(NULL), m_open(false), width(width), height(height), fps(fps)
+{
+    open(device);
+}
+
+LinuxCapture::~LinuxCapture()
+{
+    delete this->cam;
+}
+
+bool LinuxCapture::open(const string &device)
+{
+    if (m_open)
+        release();
+    cam = new Webcam(device.c_str(), 1);
+    cam->SetResolution(width, height);
+    cam->SetFPS(fps);
+    cam->SetStreaming(true);
+    m_open = true;
+    return true;
+}
+
+bool LinuxCapture::open(int device)
+{
+    char path[255];
+    snprintf(path, 255, "/dev/video%d", device);
+    return open(path);
+}
+
+bool LinuxCapture::isOpened() const
+{
+    return m_open && cam->IsStreaming();
+}
+
+void LinuxCapture::release()
+{
+    cam->SetStreaming(false);
+    delete cam;
+    m_open = false;
+}
+
+bool LinuxCapture::grab()
+{
+    cam->GetFrame(image_buffer);
+    return true;
+}
+
+bool LinuxCapture::retrieve(cv::Mat &image, int)
+{
+    image = image_buffer.getMat();
+    return true;
+}
+
+LinuxCapture& LinuxCapture::operator>>(cv::Mat& image)
+{
+    this->grab();
+    image = image_buffer.getMat();
+    return *this;
+}
+
+bool LinuxCapture::read(cv::Mat &image)
+{
+    image = this->image_buffer.getMat();
+    return true;
+}
+
+bool LinuxCapture::set(int propId, double value)
+{
+    cam->SetControl(propId, value);
+    return true;
+}
+
+double LinuxCapture::get(int)
+{
+    throw std::runtime_error("Not implemented");
+}
+
+#endif

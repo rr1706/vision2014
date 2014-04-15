@@ -23,7 +23,10 @@
 #include "data.hpp"
 #include "config.hpp"
 #include "udpserver.h"
+#ifdef USE_V4L2
 #include "../lib/Webcam.hpp"
+#endif
+#include "imagefoldercapture.h"
 
 const float BUMPER_HEIGHT = 5;
 
@@ -40,12 +43,12 @@ const char KEY_SAVE = 'w';
 const char KEY_SPEED = ' ';
 
 // config
-ProcessingMode procMode = SA;
-const InputSource mode = V4L2;
+ProcessingMode procMode = DEMO;
+const InputSource mode = IMGDIR;
 int cameraId = 2;
 TrackMode tracking = TARGET;
 const string videoPath = "Y400cmX646cm.avi";
-const string imdirPath = "/home/connor/robotics/2014/Debug/20140313_120504/demo";
+const string imdirPath = "/home/connor/robotics/2014/matches/calibration_searcy";
 const bool imdirLoop = true;
 const TeamColor color = RED;
 const bool doUdp = true;
@@ -237,54 +240,55 @@ int lastBrightness = 0;
 int currentHue = 0;
 int lastHue = 0;
 
+static const bool DEMO_RESIZE = false;
+
 int demo()
 {
     clock_t begin = clock();
     ImageWriter writer(true, 1.0, "demo");
     ThreadData data;
-    CameraFrame camFrame;
-    Webcam *v4l2Cam;
-    int imgdirIndex = 0;
+    VideoCapture* camera;
     if (mode == CAMERA) {
-        data.camera = VideoCapture(cameraId);
-        if (!data.camera.isOpened()) {
+        camera = new VideoCapture(cameraId);
+        if (!camera->isOpened()) {
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
-        data.camera.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-        data.camera.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+        camera->set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+        camera->set(CV_CAP_PROP_FRAME_HEIGHT, 720);
     } else if (mode == VIDEO) {
-        data.camera = VideoCapture(videoPath);
-        if (!data.camera.isOpened()) {
+        camera = new VideoCapture(videoPath);
+        if (!camera->isOpened()) {
             cerr << "Failed to open video path:" << videoPath << endl;
             return -1;
         }
+#ifdef USE_V4L2
     } else if (mode == V4L2) {
         sprintf(str, "/dev/video1706%d", cameraId);
-        v4l2Cam = new Webcam(str, 1);
-        v4l2Cam->SetResolution(640, 480);
-        v4l2Cam->SetFPS(30);
-        v4l2Cam->SetStreaming(true);
-        v4l2Cam->SetControl(V4L2_CID_AUTO_WHITE_BALANCE, 0);
-        v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, currentBrightness);
-        v4l2Cam->SetControl(V4L2_CID_SHARPNESS, 4);
-        v4l2Cam->SetControl(V4L2_CID_CONTRAST, 32);
-        v4l2Cam->SetControl(V4L2_CID_SATURATION, 55);
-        v4l2Cam->SetControl(V4L2_CID_HUE, currentHue);
-        v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
-        for (auto x : v4l2Cam->GetPixelFormats()) {
-            unsigned char* fourcc = (unsigned char*) &x;
-            printf("pix fmt %c%c%c%c\n", fourcc[0], fourcc[1], fourcc[2], fourcc[3]);
-        }
+        camera = new LinuxCapture(str, 640, 480, 30);
+        camera->set(V4L2_CID_AUTO_WHITE_BALANCE, 0);
+        camera->set(V4L2_CID_BRIGHTNESS, currentBrightness);
+        camera->set(V4L2_CID_SHARPNESS, 4);
+        camera->set(V4L2_CID_CONTRAST, 32);
+        camera->set(V4L2_CID_SATURATION, 55);
+        camera->set(V4L2_CID_HUE, currentHue);
+        camera->set(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
     } else if (mode == OCV_V4L2) {
         sprintf(str, "v4l2:///dev/video1706%d", cameraId);
-        data.camera = VideoCapture(str);
-        if (!data.camera.isOpened()) {
+        camera = new VideoCapture(str);
+        if (!camera->isOpened()) {
             cerr << "Failed to open camera device id:" << cameraId << endl;
             return -1;
         }
+#endif
     } else if (mode == IMGDIR) {
-
+        camera = new ImageFolderCapture(imdirPath);
+        if (!camera->isOpened()) {
+            cerr << "Failed to open image folder: " << imdirPath << endl;
+            return -1;
+        }
+        if (imdirLoop)
+            camera->set(IFC_CAP_PROP_LOOP, 1);
     }
     int currentSave = 0;
     int trackI = tracking;
@@ -311,37 +315,21 @@ int demo()
         // Start timing a frame (FPS will be a measurement of the time it takes to process all the code for each frame)
         auto start = std::chrono::high_resolution_clock::now();
 
-        if (mode == CAMERA || mode == VIDEO) {
-            data.camera >> img;
-        } else if (mode == IMAGE) {
+        if (mode == IMAGE)
             img = inframe.clone();
-        } else if (mode == V4L2) {
-            v4l2Cam->GetFrame(camFrame);
-            img = camFrame.getMat();
-        } else if (mode == OCV_V4L2) {
-            data.camera >> img;
+        else
+            *camera >> img;
+
+        if (DEMO_RESIZE)
             cv::resize(img, img, resizeResolution);
-        } else if (mode == IMGDIR) {
-            sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
-            if (access(str, R_OK) == 0) {
-                img = imread(str);
-            } else if (imdirLoop) {
-                imgdirIndex = 0;
-                sprintf(str, "%s/raw_img_%d.png", imdirPath.c_str(), imgdirIndex++);
-                img = imread(str);
-            } else {
-                printf("Stream ending normally, file %s not found.\n", str);
-                return 0;
-            }
-        }
-        if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA) {
+
+        if (FLIP_IMAGE && cameraId == FLIP_IMAGE_CAMERA)
             cv::flip(img, img, -1);
-        }
 
         int delay = 1;
-        if (mode == IMGDIR) {
+        if (mode == IMGDIR)
             delay = 300;
-        }
+
         //Break out of loop if esc is pressed
         switch (char key = waitKey(delay)) {
         case KEY_QUIT:
@@ -552,14 +540,16 @@ int demo()
         double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()) / 1000000000.0;
         printf("Last frame: %.2f seconds.", seconds);
         fflush(stdout);
-        if (currentBrightness != lastBrightness && v4l2Cam != NULL) {
-            v4l2Cam->SetControl(V4L2_CID_BRIGHTNESS, currentBrightness);
+#ifdef USE_V4L2
+        if (currentBrightness != lastBrightness && mode == V4L2) {
+            camera->set(V4L2_CID_BRIGHTNESS, currentBrightness);
             lastBrightness = currentBrightness;
         }
-        if (currentHue != lastHue && v4l2Cam != NULL) {
-            v4l2Cam->SetControl(V4L2_CID_HUE, currentHue);
+        if (currentHue != lastHue && mode == V4L2) {
+            camera->set(V4L2_CID_HUE, currentHue);
             lastHue = currentHue;
         }
+#endif
         if (mode == IMAGE) {
             char k = waitKey(); // pause
             if (k >= '0' && k <= '9') {
@@ -580,15 +570,14 @@ int demo()
 }
 
 void runThread(ThreadData *data) {
+#ifdef USE_V4L2
     data->v4l2Cam->GetFrame(data->camFrame);
     data->image = data->camFrame.getMat();
-//    data->camera >> data->image;
-//    cv::pyrDown(data->image, data->image);
-//    cv::pyrDown(data->image, data->image);
+#endif
     if (resizeResolution != captureResolution)
         cv::resize(data->image, data->image, resizeResolution);
-    if (data->id == 2) {
-//        cv::flip(data->image, data->image, -1);
+    if (data->id == 2 && false) {
+        cv::flip(data->image, data->image, -1);
     }
     data->original = data->image.clone();
     static const int padding = 5;
@@ -610,7 +599,6 @@ void runThread(ThreadData *data) {
     data->image = topROI;
     targetDetection(*data);
     data->targetDetect = data->image.clone();
-    //    data->image = data->original.clone();
     data->image = bottomROI;
     ballDetection(*data);
 }
@@ -621,9 +609,10 @@ UDPServer* server;
 
 void stopCameras() {
     for (unsigned int i = 0; i < CAMERA_COUNT; i++) {
-//            threadData[i]->camera.release();
+#ifdef USE_V4L2
         threadData[i]->v4l2Cam->SetStreaming(false);
         delete threadData[i]->v4l2Cam;
+#endif
     }
     shutdown(server->socketFd, SHUT_RDWR);
     serverThread->join();
@@ -664,8 +653,8 @@ int sa()
                                                 "d1_dist", "d1_width", "d1_height", "d1_x", "d1_y"
                                           });
         }
+#ifdef USE_V4L2
         sprintf(str, "/dev/video1706%d", cameraToDeviceTable[i]);
-//        threadData[i]->camera.open(str);
         threadData[i]->v4l2Cam = new Webcam(str, 1);
         threadData[i]->v4l2Cam->SetResolution(captureResolution.width, captureResolution.height);
         threadData[i]->v4l2Cam->SetFPS(30);
@@ -677,6 +666,7 @@ int sa()
         threadData[i]->v4l2Cam->SetControl(V4L2_CID_SATURATION, 55);
         threadData[i]->v4l2Cam->SetControl(V4L2_CID_HUE, 0);
         threadData[i]->v4l2Cam->SetControl(V4L2_CID_WHITE_BALANCE_TEMPERATURE, 0);
+#endif
 
     }
     server = new UDPServer(8888);

@@ -77,6 +77,9 @@ void targetDetection(ThreadData &data)
         case Thresh::IR_MAX:
             curThreshVal = gray_max;
             break;
+        default:
+            curThreshVal = gray_min;
+            break;
         }
         sprintf(str, "%s: %d", Thresh::str(currentThreshold).c_str(), curThreshVal);
         Window::print(string(str), thresh, Point(5, 30));
@@ -106,9 +109,7 @@ void targetDetection(ThreadData &data)
     findContours(img, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
 
     vector<string> statusText;
-    int totalContours = contours.size();
     int failedArea = 0;
-    int failedHierarchy = 0;
     int failedSides = 0;
     int failedConvex = 0;
     int failedSquare = 0;

@@ -66,5 +66,38 @@ private:
 	void AllocateBuffer(size_t index);
 	void DeallocateBuffer(size_t index);
 };
+#ifdef WEBCAM_OCV
+#include <opencv2/highgui/highgui.hpp>
+
+class LinuxCapture : public cv::VideoCapture
+{
+public:
+    LinuxCapture();
+    LinuxCapture(const std::string& device, int width = 640, int height = 480, int fps = 30);
+    LinuxCapture(int device, int width = 640, int height = 480, int fps = 30);
+    virtual ~LinuxCapture();
+
+    virtual bool open(const std::string &device);
+    virtual bool open(int device);
+    virtual bool isOpened() const;
+    void release();
+
+    bool grab();
+    bool retrieve(cv::Mat &image, int channel);
+    LinuxCapture& operator>>(cv::Mat& image);
+    bool read(cv::Mat &image);
+
+    bool set(int propId, double value);
+    double get(int);
+
+    void setResolution(int x, int y);
+    void setFPS(int fps);
+protected:
+    Webcam* cam;
+    bool m_open;
+    CameraFrame image_buffer;
+    int width, height, fps;
+};
+#endif
 
 #endif
