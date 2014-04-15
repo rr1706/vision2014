@@ -1,16 +1,9 @@
-#-------------------------------------------------
-#
-# Project created by QtCreator 2012-01-28T14:32:54
-#
-#-------------------------------------------------
 
 QT       += core
-
 QT       -= gui
-
 QT       += network
 
-TARGET = Depth
+TARGET = vision2014
 CONFIG   += console
 CONFIG   -= app_bundle
 
@@ -33,7 +26,7 @@ SOURCES += \
     udpserver.cpp \
     imagefoldercapture.cpp
 
-LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui #`pkg-config --libs opencv`
+LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui
 QMAKE_CXXFLAGS += -std=c++0x -I/usr/include/ni -DWEBCAM_OCV -DUSE_V4L2
 
 HEADERS += \
